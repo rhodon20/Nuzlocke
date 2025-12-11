@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -406,7 +405,7 @@
       opacity: 0.7;
     }
   </style>
-<link rel="stylesheet" href="/index.css">
+  <link rel="stylesheet" href="index.css">
 </head>
 
 <body onload="initGame()">
@@ -420,13 +419,11 @@
 
       <div class="stats-box" id="opponent-box"></div>
       
-      <!-- Zona Enemigo -->
       <div class="combatant-zone" id="zone-opponent">
         <div class="sprite-container anim-idle" id="opponent-sprite-slot"></div>
         <div class="battle-shadow"></div>
       </div>
 
-      <!-- Zona Jugador -->
       <div class="combatant-zone" id="zone-player">
         <div class="sprite-container anim-idle" id="player-sprite-slot"></div>
         <div class="battle-shadow"></div>
@@ -436,6 +433,7 @@
     </div>
 
     <div id="team-bar">
+      <span>🏅 x<b id="badges-val">0</b></span>
       <span>🎱 x<b id="balls-val">0</b></span>
       <span>💊 x<b id="pots-val">0</b></span>
       <span>🏆 Racha: <b id="streak-val">0</b></span>
@@ -463,14 +461,12 @@
       <button id="btn-nuzlocke" onclick="startGame('nuzlocke')">☠️ Modo Nuzlocke</button>
     </div>
 
-    <!-- SWITCH MENU -->
     <div id="switch-overlay" class="modal-overlay">
       <h3 class="modal-title">Elige un Pokémon</h3>
       <div id="switch-list" class="modal-list"></div>
       <button class="btn-action" onclick="closeSwitchMenu()">Cancelar</button>
     </div>
 
-    <!-- MOVE LEARNING MENU -->
     <div id="move-overlay" class="modal-overlay">
       <h3 class="modal-title">¡Límite de movimientos!</h3>
       <p style="text-align:center; font-size:0.9rem; margin-bottom:10px;">Elige un movimiento para olvidar:</p>
@@ -478,7 +474,6 @@
       <button class="btn-action" id="btn-cancel-learn">No aprender</button>
     </div>
 
-    <!-- FULL PARTY MENU -->
     <div id="party-full-overlay" class="modal-overlay">
       <h3 class="modal-title">¡Equipo Completo!</h3>
       <p style="text-align:center; font-size:0.9rem; margin-bottom:10px;">Selecciona un Pokémon para <b>liberar</b> y hacer sitio al nuevo, o libera al capturado.</p>
@@ -505,500 +500,13 @@ const CONSTANTS = {
 const SLUG_MAP = {
   "Nidoran-F": "nidoran-f", "Nidoran-M": "nidoran-m", "Mr. Mime": "mr-mime", "Farfetch'd": "farfetchd"
 };
+</script>
+<script src="moveset.js"></script>
+<script src="pok_catalog.js"></script>
+<script src="evolutions.js"></script>
+<script src="types.js"></script>
 
-const MOVES = {
-  // --- NORMAL ---
-  'Tackle': { nombre: 'Placaje', poder: 40, tipo: 'Normal', cat: 'Fis' },
-  'Scratch': { nombre: 'Arañazo', poder: 40, tipo: 'Normal', cat: 'Fis' },
-  'Quick Attack': { nombre: 'Ataque Rápido', poder: 40, tipo: 'Normal', cat: 'Fis' },
-  'Cut': { nombre: 'Corte', poder: 50, tipo: 'Normal', cat: 'Fis' },
-  'Headbutt': { nombre: 'Golpe Cabeza', poder: 70, tipo: 'Normal', cat: 'Fis', effect: 'FLI', chance: 0.3 },
-  'Body Slam': { nombre: 'Golpe Cuerpo', poder: 85, tipo: 'Normal', cat: 'Fis', effect: 'PAR', chance: 0.3 },
-  'Slash': { nombre: 'Cuchillada', poder: 70, tipo: 'Normal', cat: 'Fis' }, // Alta prob critico
-  'Double-Edge': { nombre: 'Doble Filo', poder: 120, tipo: 'Normal', cat: 'Fis' }, // Tiene recoil
-  'Hyper Beam': { nombre: 'Hiperrayo', poder: 150, tipo: 'Normal', cat: 'Esp' },
-  'Tri Attack': { nombre: 'Triataque', poder: 80, tipo: 'Normal', cat: 'Esp', effect: 'PAR|BRN|FRZ', chance: 0.2 },
-  'Extreme Speed': { nombre: 'Velocidad Extrema', poder: 80, tipo: 'Normal', cat: 'Fis' },
-
-  // --- FUEGO ---
-  'Ember': { nombre: 'Ascuas', poder: 40, tipo: 'Fuego', cat: 'Esp', effect: 'BRN', chance: 0.1 },
-  'Flamethrower': { nombre: 'Lanzallamas', poder: 90, tipo: 'Fuego', cat: 'Esp', effect: 'BRN', chance: 0.1 },
-  'Fire Punch': { nombre: 'Puño Fuego', poder: 75, tipo: 'Fuego', cat: 'Fis', effect: 'BRN', chance: 0.1 },
-  'Fire Blast': { nombre: 'Llamarada', poder: 110, tipo: 'Fuego', cat: 'Esp', effect: 'BRN', chance: 0.1 },
-  'Flame Wheel': { nombre: 'Rueda Fuego', poder: 60, tipo: 'Fuego', cat: 'Fis', effect: 'BRN', chance: 0.1 },
-  'Sacred Fire': { nombre: 'Fuego Sagrado', poder: 100, tipo: 'Fuego', cat: 'Fis', effect: 'BRN', chance: 0.5 },
-
-  // --- AGUA ---
-  'Water Gun': { nombre: 'Pistola Agua', poder: 40, tipo: 'Agua', cat: 'Esp' },
-  'Surf': { nombre: 'Surf', poder: 90, tipo: 'Agua', cat: 'Esp' },
-  'Bubble Beam': { nombre: 'Rayo Burbuja', poder: 65, tipo: 'Agua', cat: 'Esp', effect: 'SPD_DOWN', chance: 0.1 },
-  'Hydro Pump': { nombre: 'Hidrobomba', poder: 110, tipo: 'Agua', cat: 'Esp' },
-  'Waterfall': { nombre: 'Cascada', poder: 80, tipo: 'Agua', cat: 'Fis', effect: 'FLI', chance: 0.2 },
-
-  // --- PLANTA ---
-  'Vine Whip': { nombre: 'Látigo Cepa', poder: 45, tipo: 'Planta', cat: 'Fis' },
-  'Razor Leaf': { nombre: 'Hoja Afilada', poder: 55, tipo: 'Planta', cat: 'Fis' }, // Alta prob critico
-  'Solar Beam': { nombre: 'Rayo Solar', poder: 120, tipo: 'Planta', cat: 'Esp' }, // 2 turnos
-  'Giga Drain': { nombre: 'Gigadrenado', poder: 75, tipo: 'Planta', cat: 'Esp' }, // Roba vida
-  'Petal Dance': { nombre: 'Danza Pétalo', poder: 120, tipo: 'Planta', cat: 'Esp' },
-
-  // --- ELÉCTRICO ---
-  'Thunder Shock': { nombre: 'Impactrueno', poder: 40, tipo: 'Eléctrico', cat: 'Esp', effect: 'PAR', chance: 0.1 },
-  'Thunderbolt': { nombre: 'Rayo', poder: 90, tipo: 'Eléctrico', cat: 'Esp', effect: 'PAR', chance: 0.1 },
-  'Thunder Punch': { nombre: 'Puño Trueno', poder: 75, tipo: 'Eléctrico', cat: 'Fis', effect: 'PAR', chance: 0.1 },
-  'Thunder': { nombre: 'Trueno', poder: 110, tipo: 'Eléctrico', cat: 'Esp', effect: 'PAR', chance: 0.3 },
-  'Spark': { nombre: 'Chispa', poder: 65, tipo: 'Eléctrico', cat: 'Fis', effect: 'PAR', chance: 0.3 },
-  'Zap Cannon': { nombre: 'Electrocañón', poder: 120, tipo: 'Eléctrico', cat: 'Esp', effect: 'PAR', chance: 1.0 },
-
-  // --- HIELO ---
-  'Ice Beam': { nombre: 'Rayo Hielo', poder: 90, tipo: 'Hielo', cat: 'Esp', effect: 'FRZ', chance: 0.1 },
-  'Ice Punch': { nombre: 'Puño Hielo', poder: 75, tipo: 'Hielo', cat: 'Fis', effect: 'FRZ', chance: 0.1 },
-  'Blizzard': { nombre: 'Ventisca', poder: 110, tipo: 'Hielo', cat: 'Esp', effect: 'FRZ', chance: 0.1 },
-  'Icy Wind': { nombre: 'Viento Hielo', poder: 55, tipo: 'Hielo', cat: 'Esp', effect: 'SPD_DOWN', chance: 1.0 },
-
-  // --- LUCHA ---
-  'Karate Chop': { nombre: 'Golpe Karate', poder: 50, tipo: 'Lucha', cat: 'Fis' }, // En Gen2 cambia a Lucha
-  'Mach Punch': { nombre: 'Ultrapuño', poder: 40, tipo: 'Lucha', cat: 'Fis' },
-  'Cross Chop': { nombre: 'Tajo Cruzado', poder: 100, tipo: 'Lucha', cat: 'Fis' },
-  'Dynamic Punch': { nombre: 'Puño Dinámico', poder: 100, tipo: 'Lucha', cat: 'Fis', effect: 'CON', chance: 1.0 },
-  'Reversal': { nombre: 'Inversión', poder: 0, tipo: 'Lucha', cat: 'Fis' }, // Variable
-  
-  // --- VENENO ---
-  'Poison Sting': { nombre: 'Picotazo Ven', poder: 15, tipo: 'Veneno', cat: 'Fis', effect: 'PSN', chance: 0.3 },
-  'Sludge Bomb': { nombre: 'Bomba Lodo', poder: 90, tipo: 'Veneno', cat: 'Esp', effect: 'PSN', chance: 0.3 },
-  
-  // --- TIERRA ---
-  'Earthquake': { nombre: 'Terremoto', poder: 100, tipo: 'Tierra', cat: 'Fis' },
-  'Dig': { nombre: 'Excavar', poder: 80, tipo: 'Tierra', cat: 'Fis' }, // 2 turnos
-  'Mud-Slap': { nombre: 'Bofetón Lodo', poder: 20, tipo: 'Tierra', cat: 'Esp', effect: 'ACC_DOWN', chance: 1.0 },
-  'Bonemerang': { nombre: 'Huesomerang', poder: 50, tipo: 'Tierra', cat: 'Fis' }, // Golpea 2 veces
-  
-  // --- VOLADOR ---
-  'Wing Attack': { nombre: 'Ataque Ala', poder: 60, tipo: 'Volador', cat: 'Fis' },
-  'Peck': { nombre: 'Picotazo', poder: 35, tipo: 'Volador', cat: 'Fis' },
-  'Fly': { nombre: 'Vuelo', poder: 90, tipo: 'Volador', cat: 'Fis' }, // 2 turnos
-  'Drill Peck': { nombre: 'Pico Taladro', poder: 80, tipo: 'Volador', cat: 'Fis' },
-  'Aeroblast': { nombre: 'Aerochorro', poder: 100, tipo: 'Volador', cat: 'Esp' },
-
-  // --- PSÍQUICO ---
-  'Psychic': { nombre: 'Psíquico', poder: 90, tipo: 'Psíquico', cat: 'Esp', effect: 'SPDEF_DOWN', chance: 0.1 },
-  'Confusion': { nombre: 'Confusión', poder: 50, tipo: 'Psíquico', cat: 'Esp', effect: 'CON', chance: 0.1 },
-  'Psybeam': { nombre: 'Psicorrayo', poder: 65, tipo: 'Psíquico', cat: 'Esp', effect: 'CON', chance: 0.1 },
-  'Dream Eater': { nombre: 'Comesueños', poder: 100, tipo: 'Psíquico', cat: 'Esp' }, // Solo dormidos
-
-  // --- BICHO ---
-  'Megahorn': { nombre: 'Megacuerno', poder: 120, tipo: 'Bicho', cat: 'Fis' },
-  'Pin Missile': { nombre: 'Pin Misil', poder: 25, tipo: 'Bicho', cat: 'Fis' }, // 2-5 golpes
-  'Fury Cutter': { nombre: 'Corte Furia', poder: 40, tipo: 'Bicho', cat: 'Fis' }, // Sube poder consecutivamente
-
-  // --- ROCA ---
-  'Rock Throw': { nombre: 'Lanzarrocas', poder: 50, tipo: 'Roca', cat: 'Fis' },
-  'Rock Slide': { nombre: 'Avalancha', poder: 75, tipo: 'Roca', cat: 'Fis', effect: 'FLI', chance: 0.3 },
-  'Ancient Power': { nombre: 'Poder Pasado', poder: 60, tipo: 'Roca', cat: 'Esp', effect: 'ALL_UP', chance: 0.1 },
-  'Rollout': { nombre: 'Desenrollar', poder: 30, tipo: 'Roca', cat: 'Fis' }, // Sube poder
-
-  // --- FANTASMA ---
-  'Lick': { nombre: 'Lengüetazo', poder: 30, tipo: 'Fantasma', cat: 'Fis', effect: 'PAR', chance: 0.3 },
-  'Shadow Ball': { nombre: 'Bola Sombra', poder: 80, tipo: 'Fantasma', cat: 'Esp', effect: 'SPDEF_DOWN', chance: 0.2 },
-  
-  // --- DRAGÓN ---
-  'Dragon Rage': { nombre: 'Furia Dragón', poder: 0, tipo: 'Dragón', cat: 'Esp' }, // Daño fijo 40
-  'Dragon Breath': { nombre: 'Dragoaliento', poder: 60, tipo: 'Dragón', cat: 'Esp', effect: 'PAR', chance: 0.3 },
-  'Outrage': { nombre: 'Enfado', poder: 120, tipo: 'Dragón', cat: 'Fis', effect: 'CON', chance: 1.0 }, // Self confusion
-
-  // --- ACERO (NUEVO GEN 2) ---
-  'Steel Wing': { nombre: 'Ala de Acero', poder: 70, tipo: 'Acero', cat: 'Fis', effect: 'DEF_UP', chance: 0.1 },
-  'Iron Tail': { nombre: 'Cola Férrea', poder: 100, tipo: 'Acero', cat: 'Fis', effect: 'DEF_DOWN', chance: 0.3 },
-  'Metal Claw': { nombre: 'Garra Metal', poder: 50, tipo: 'Acero', cat: 'Fis', effect: 'ATK_UP', chance: 0.1 },
-
-  // --- SINIESTRO (NUEVO GEN 2) ---
-  'Bite': { nombre: 'Mordisco', poder: 60, tipo: 'Siniestro', cat: 'Fis', effect: 'FLI', chance: 0.3 }, // Cambiado a Siniestro
-  'Crunch': { nombre: 'Triturar', poder: 80, tipo: 'Siniestro', cat: 'Fis', effect: 'DEF_DOWN', chance: 0.2 },
-  'Faint Attack': { nombre: 'Finta', poder: 60, tipo: 'Siniestro', cat: 'Fis' }, // Infalible
-  'Thief': { nombre: 'Ladrón', poder: 60, tipo: 'Siniestro', cat: 'Fis' },
-  'Pursuit': { nombre: 'Persecución', poder: 40, tipo: 'Siniestro', cat: 'Fis' }
-};
-
-const EVOLUTIONS = {
-  // --- KANTO (GEN 1) ---
-  'Bulbasaur': { 16: 'Ivysaur', 10: 'Vine Whip', 25: 'Razor Leaf' },
-  'Ivysaur': { 32: 'Venusaur', 22: 'Razor Leaf' },
-  'Venusaur': { 45: 'Solar Beam' },
-  
-  'Charmander': { 16: 'Charmeleon', 10: 'Ember', 25: 'Flamethrower' },
-  'Charmeleon': { 36: 'Charizard', 30: 'Flamethrower' },
-  'Charizard': { 40: 'Wing Attack', 50: 'Fire Blast' },
-
-  'Squirtle': { 16: 'Wartortle', 10: 'Water Gun', 25: 'Bite' },
-  'Wartortle': { 36: 'Blastoise', 30: 'Ice Beam' }, // Simplificado
-  'Blastoise': { 45: 'Hydro Pump' },
-
-  'Pidgey': { 18: 'Pidgeotto', 12: 'Quick Attack', 20: 'Wing Attack' },
-  'Pidgeotto': { 36: 'Pidgeot', 25: 'Wing Attack' },
-  'Pidgeot': { 40: 'Fly' },
-
-  'Rattata': { 20: 'Raticate', 10: 'Quick Attack', 15: 'Hyper Fang' },
-  'Pikachu': { 22: 'Raichu', 10: 'Thunder Shock', 26: 'Thunderbolt' },
-  
-  'Zubat': { 22: 'Golbat', 15: 'Bite' },
-  'Golbat': { 35: 'Crobat', 25: 'Wing Attack' }, // Evolución Cross-Gen
-
-  'Oddish': { 21: 'Gloom', 15: 'Poison Powder' },
-  'Gloom': { 30: 'Vileplume' }, // Piedra Hoja simplificada
-
-  'Mankey': { 28: 'Primeape', 15: 'Karate Chop' },
-  'Poliwag': { 25: 'Poliwhirl', 15: 'Water Gun' },
-  'Poliwhirl': { 35: 'Poliwrath', 30: 'Body Slam' },
-
-  'Abra': { 16: 'Kadabra' },
-  'Kadabra': { 36: 'Alakazam', 20: 'Psychic', 25: 'Recover' },
-  
-  'Machop': { 28: 'Machoke', 20: 'Karate Chop' },
-  'Machoke': { 40: 'Machamp', 35: 'Cross Chop' },
-
-  'Geodude': { 25: 'Graveler', 15: 'Rock Throw' },
-  'Graveler': { 40: 'Golem', 30: 'Earthquake' },
-
-  'Gastly': { 25: 'Haunter', 15: 'Lick' },
-  'Haunter': { 40: 'Gengar', 25: 'Shadow Ball' },
-
-  'Onix': { 40: 'Steelix', 20: 'Rock Throw', 30: 'Iron Tail' }, // Evolución Cross-Gen
-
-  'Eevee': { 25: 'Vaporeon', 26: 'Jolteon', 27: 'Flareon', 28: 'Espeon', 29: 'Umbreon', 10: 'Quick Attack' }, // Niveles arbitrarios para diferenciar
-
-  'Scyther': { 40: 'Scizor', 20: 'Wing Attack', 30: 'Slash' }, // Evolución Cross-Gen
-  'Magikarp': { 20: 'Gyarados', 15: 'Tackle' },
-  'Gyarados': { 25: 'Bite', 35: 'Hydro Pump' },
-
-  'Dratini': { 30: 'Dragonair', 20: 'Dragon Rage' },
-  'Dragonair': { 55: 'Dragonite', 40: 'Dragon Breath' },
-  'Dragonite': { 60: 'Outrage' },
-
-  // --- JOHTO (GEN 2) ---
-  'Chikorita': { 16: 'Bayleef', 10: 'Razor Leaf', 15: 'Poison Powder' },
-  'Bayleef': { 32: 'Meganium', 20: 'Reflect', 30: 'Body Slam' },
-  'Meganium': { 40: 'Solar Beam' },
-
-  'Cyndaquil': { 14: 'Quilava', 12: 'Ember', 20: 'Quick Attack' },
-  'Quilava': { 36: 'Typhlosion', 30: 'Flame Wheel' },
-  'Typhlosion': { 45: 'Flamethrower' },
-
-  'Totodile': { 18: 'Croconaw', 13: 'Water Gun', 20: 'Bite' },
-  'Croconaw': { 30: 'Feraligatr', 25: 'Ice Fang' },
-  'Feraligatr': { 40: 'Hydro Pump', 45: 'Slash' },
-
-  'Sentret': { 15: 'Furret', 10: 'Quick Attack' },
-  'Hoothoot': { 20: 'Noctowl', 15: 'Peck' },
-  'Ledyba': { 18: 'Ledian', 12: 'Comet Punch' },
-  'Spinarak': { 22: 'Ariados', 12: 'Poison Sting' },
-  
-  'Mareep': { 15: 'Flaaffy', 10: 'Thunder Shock' },
-  'Flaaffy': { 30: 'Ampharos', 20: 'Thunder Punch' },
-  'Ampharos': { 40: 'Thunder' },
-
-  'Marill': { 18: 'Azumarill', 10: 'Water Gun', 15: 'Bubble Beam' },
-  'Wooper': { 20: 'Quagsire', 15: 'Water Gun' },
-  'Quagsire': { 25: 'Earthquake' },
-
-  'Snubbull': { 23: 'Granbull', 15: 'Bite' },
-  'Teddiursa': { 30: 'Ursaring', 15: 'Scratch', 25: 'Faint Attack' },
-  
-  'Houndour': { 24: 'Houndoom', 15: 'Ember', 20: 'Bite' },
-  'Houndoom': { 35: 'Crunch', 45: 'Flamethrower' },
-
-  'Phanpy': { 25: 'Donphan', 15: 'Rollout' },
-  'Donphan': { 35: 'Earthquake' },
-
-  'Larvitar': { 30: 'Pupitar', 15: 'Rock Slide', 22: 'Bite' },
-  'Pupitar': { 55: 'Tyranitar', 40: 'Crunch' },
-  'Tyranitar': { 60: 'Earthquake', 65: 'Hyper Beam' }
-};
-
-const POKEMON_PART_1 = {
-  'Bulbasaur': { hp: 45, atk: 49, def: 49, type: ['Planta', 'Veneno'], moves: ['Tackle', 'Vine Whip'] },
-  'Ivysaur': { hp: 60, atk: 62, def: 63, type: ['Planta', 'Veneno'], moves: ['Vine Whip', 'Razor Leaf'] },
-  'Venusaur': { hp: 80, atk: 82, def: 83, type: ['Planta', 'Veneno'], moves: ['Razor Leaf', 'Solar Beam'] },
-  'Charmander': { hp: 39, atk: 52, def: 43, type: ['Fuego'], moves: ['Scratch', 'Ember'] },
-  'Charmeleon': { hp: 58, atk: 64, def: 58, type: ['Fuego'], moves: ['Scratch', 'Flamethrower'] },
-  'Charizard': { hp: 78, atk: 84, def: 78, type: ['Fuego', 'Volador'], moves: ['Flamethrower', 'Wing Attack'] },
-  'Squirtle': { hp: 44, atk: 48, def: 65, type: ['Agua'], moves: ['Tackle', 'Water Gun'] },
-  'Wartortle': { hp: 59, atk: 63, def: 80, type: ['Agua'], moves: ['Water Gun', 'Bite'] },
-  'Blastoise': { hp: 79, atk: 83, def: 100, type: ['Agua'], moves: ['Surf', 'Hydro Pump'] },
-  'Caterpie': { hp: 45, atk: 30, def: 35, type: ['Bicho'], moves: ['Tackle'] },
-  'Metapod': { hp: 50, atk: 20, def: 55, type: ['Bicho'], moves: ['Harden'] },
-  'Butterfree': { hp: 60, atk: 45, def: 50, type: ['Bicho', 'Volador'], moves: ['Confusion', 'Gust'] },
-  'Weedle': { hp: 40, atk: 35, def: 30, type: ['Bicho', 'Veneno'], moves: ['Poison Sting'] },
-  'Kakuna': { hp: 45, atk: 25, def: 50, type: ['Bicho', 'Veneno'], moves: ['Harden'] },
-  'Beedrill': { hp: 65, atk: 80, def: 40, type: ['Bicho', 'Veneno'], moves: ['Twineedle', 'Pin Missile'] },
-  'Pidgey': { hp: 40, atk: 45, def: 40, type: ['Normal', 'Volador'], moves: ['Tackle', 'Gust'] },
-  'Pidgeotto': { hp: 63, atk: 60, def: 55, type: ['Normal', 'Volador'], moves: ['Quick Attack', 'Wing Attack'] },
-  'Pidgeot': { hp: 83, atk: 80, def: 75, type: ['Normal', 'Volador'], moves: ['Wing Attack', 'Fly'] },
-  'Rattata': { hp: 30, atk: 56, def: 35, type: ['Normal'], moves: ['Tackle', 'Quick Attack'] },
-  'Raticate': { hp: 55, atk: 81, def: 60, type: ['Normal'], moves: ['Hyper Fang', 'Quick Attack'] },
-  'Spearow': { hp: 40, atk: 60, def: 30, type: ['Normal', 'Volador'], moves: ['Peck', 'Drill Peck'] },
-  'Fearow': { hp: 65, atk: 90, def: 65, type: ['Normal', 'Volador'], moves: ['Drill Peck', 'Fly'] },
-  'Ekans': { hp: 35, atk: 60, def: 44, type: ['Veneno'], moves: ['Poison Sting', 'Bite'] },
-  'Arbok': { hp: 60, atk: 85, def: 69, type: ['Veneno'], moves: ['Bite', 'Acid'] },
-  'Pikachu': { hp: 35, atk: 55, def: 40, type: ['Eléctrico'], moves: ['Thunder Shock', 'Quick Attack'] },
-  'Raichu': { hp: 60, atk: 90, def: 55, type: ['Eléctrico'], moves: ['Thunderbolt', 'Thunder'] },
-  'Sandshrew': { hp: 50, atk: 75, def: 85, type: ['Tierra'], moves: ['Scratch', 'Sand Attack'] },
-  'Sandslash': { hp: 75, atk: 100, def: 110, type: ['Tierra'], moves: ['Slash', 'Earthquake'] },
-  'Nidoran F': { hp: 55, atk: 47, def: 52, type: ['Veneno'], moves: ['Scratch', 'Poison Sting'] },
-  'Nidorina': { hp: 70, atk: 62, def: 67, type: ['Veneno'], moves: ['Bite', 'Double Kick'] },
-  'Nidoqueen': { hp: 90, atk: 92, def: 87, type: ['Veneno', 'Tierra'], moves: ['Body Slam', 'Earthquake'] },
-  'Nidoran M': { hp: 46, atk: 57, def: 40, type: ['Veneno'], moves: ['Peck', 'Poison Sting'] },
-  'Nidorino': { hp: 61, atk: 72, def: 57, type: ['Veneno'], moves: ['Horn Attack', 'Double Kick'] },
-  'Nidoking': { hp: 81, atk: 102, def: 77, type: ['Veneno', 'Tierra'], moves: ['Thrash', 'Earthquake'] },
-  'Clefairy': { hp: 70, atk: 45, def: 48, type: ['Normal'], moves: ['Pound', 'Sing'] },
-  'Clefable': { hp: 95, atk: 70, def: 73, type: ['Normal'], moves: ['Metronome', 'Moonlight'] },
-  'Vulpix': { hp: 38, atk: 41, def: 40, type: ['Fuego'], moves: ['Ember', 'Quick Attack'] },
-  'Ninetales': { hp: 73, atk: 76, def: 75, type: ['Fuego'], moves: ['Flamethrower', 'Confuse Ray'] },
-  'Jigglypuff': { hp: 115, atk: 45, def: 20, type: ['Normal'], moves: ['Pound', 'Sing'] },
-  'Wigglytuff': { hp: 140, atk: 70, def: 45, type: ['Normal'], moves: ['Double-Edge', 'Sing'] },
-  'Zubat': { hp: 40, atk: 45, def: 35, type: ['Veneno', 'Volador'], moves: ['Leech Life', 'Supersonic'] },
-  'Golbat': { hp: 75, atk: 80, def: 70, type: ['Veneno', 'Volador'], moves: ['Wing Attack', 'Bite'] },
-  'Oddish': { hp: 45, atk: 50, def: 55, type: ['Planta', 'Veneno'], moves: ['Absorb', 'Acid'] },
-  'Gloom': { hp: 60, atk: 65, def: 70, type: ['Planta', 'Veneno'], moves: ['Acid', 'Petal Dance'] },
-  'Vileplume': { hp: 75, atk: 80, def: 85, type: ['Planta', 'Veneno'], moves: ['Petal Dance', 'Solar Beam'] },
-  'Paras': { hp: 35, atk: 70, def: 55, type: ['Bicho', 'Planta'], moves: ['Scratch', 'Stun Spore'] },
-  'Parasect': { hp: 60, atk: 95, def: 80, type: ['Bicho', 'Planta'], moves: ['Slash', 'Spore'] },
-  'Venonat': { hp: 60, atk: 55, def: 50, type: ['Bicho', 'Veneno'], moves: ['Tackle', 'Confusion'] },
-  'Venomoth': { hp: 70, atk: 65, def: 60, type: ['Bicho', 'Veneno'], moves: ['Psybeam', 'Gust'] },
-  'Diglett': { hp: 10, atk: 55, def: 25, type: ['Tierra'], moves: ['Scratch', 'Dig'] },
-  'Dugtrio': { hp: 35, atk: 80, def: 50, type: ['Tierra'], moves: ['Dig', 'Earthquake'] },
-  'Meowth': { hp: 40, atk: 45, def: 35, type: ['Normal'], moves: ['Scratch', 'Bite'] },
-  'Persian': { hp: 65, atk: 70, def: 60, type: ['Normal'], moves: ['Slash', 'Bite'] },
-  'Psyduck': { hp: 50, atk: 52, def: 48, type: ['Agua'], moves: ['Scratch', 'Confusion'] },
-  'Golduck': { hp: 80, atk: 82, def: 78, type: ['Agua'], moves: ['Surf', 'Psychic'] },
-  'Mankey': { hp: 40, atk: 80, def: 35, type: ['Lucha'], moves: ['Scratch', 'Karate Chop'] },
-  'Primeape': { hp: 65, atk: 105, def: 60, type: ['Lucha'], moves: ['Cross Chop', 'Thrash'] },
-  'Growlithe': { hp: 55, atk: 70, def: 45, type: ['Fuego'], moves: ['Bite', 'Ember'] },
-  'Arcanine': { hp: 90, atk: 110, def: 80, type: ['Fuego'], moves: ['Flamethrower', 'Extreme Speed'] },
-  'Poliwag': { hp: 40, atk: 50, def: 40, type: ['Agua'], moves: ['Water Gun', 'Hypnosis'] },
-  'Poliwhirl': { hp: 65, atk: 65, def: 65, type: ['Agua'], moves: ['Bubble Beam', 'Body Slam'] },
-  'Poliwrath': { hp: 90, atk: 85, def: 95, type: ['Agua', 'Lucha'], moves: ['Hydro Pump', 'Dynamic Punch'] },
-  'Abra': { hp: 25, atk: 20, def: 15, type: ['Psíquico'], moves: ['Teleport'] },
-  'Kadabra': { hp: 40, atk: 35, def: 30, type: ['Psíquico'], moves: ['Psychic', 'Confusion'] },
-  'Alakazam': { hp: 55, atk: 50, def: 45, type: ['Psíquico'], moves: ['Psychic', 'Recover'] },
-  'Machop': { hp: 70, atk: 80, def: 50, type: ['Lucha'], moves: ['Karate Chop', 'Low Kick'] },
-  'Machoke': { hp: 80, atk: 100, def: 70, type: ['Lucha'], moves: ['Seismic Toss', 'Cross Chop'] },
-  'Machamp': { hp: 90, atk: 130, def: 80, type: ['Lucha'], moves: ['Cross Chop', 'Earthquake'] },
-  'Bellsprout': { hp: 50, atk: 75, def: 35, type: ['Planta', 'Veneno'], moves: ['Vine Whip'] },
-  'Weepinbell': { hp: 65, atk: 90, def: 50, type: ['Planta', 'Veneno'], moves: ['Razor Leaf', 'Acid'] },
-  'Victreebel': { hp: 80, atk: 105, def: 65, type: ['Planta', 'Veneno'], moves: ['Razor Leaf', 'Sludge Bomb'] },
-  'Tentacool': { hp: 40, atk: 40, def: 35, type: ['Agua', 'Veneno'], moves: ['Poison Sting', 'Water Gun'] },
-  'Tentacruel': { hp: 80, atk: 70, def: 65, type: ['Agua', 'Veneno'], moves: ['Surf', 'Sludge Bomb'] },
-  'Geodude': { hp: 40, atk: 80, def: 100, type: ['Roca', 'Tierra'], moves: ['Rock Throw', 'Tackle'] },
-  'Graveler': { hp: 55, atk: 95, def: 115, type: ['Roca', 'Tierra'], moves: ['Rock Slide', 'Earthquake'] },
-  'Golem': { hp: 80, atk: 110, def: 130, type: ['Roca', 'Tierra'], moves: ['Rock Slide', 'Earthquake'] },
-  'Ponyta': { hp: 50, atk: 85, def: 55, type: ['Fuego'], moves: ['Ember', 'Stomp'] },
-  'Rapidash': { hp: 65, atk: 100, def: 70, type: ['Fuego'], moves: ['Fire Blast', 'Agility'] },
-  'Slowpoke': { hp: 90, atk: 65, def: 65, type: ['Agua', 'Psíquico'], moves: ['Confusion', 'Water Gun'] },
-  'Slowbro': { hp: 95, atk: 75, def: 110, type: ['Agua', 'Psíquico'], moves: ['Surf', 'Psychic'] },
-  'Magnemite': { hp: 25, atk: 35, def: 70, type: ['Eléctrico', 'Acero'], moves: ['Thunder Shock', 'Sonic Boom'] },
-  'Magneton': { hp: 50, atk: 60, def: 95, type: ['Eléctrico', 'Acero'], moves: ['Thunderbolt', 'Tri Attack'] },
-  'Farfetch\'d': { hp: 52, atk: 65, def: 55, type: ['Normal', 'Volador'], moves: ['Slash', 'Swords Dance'] }
-};
-
-const POKEMON_PART_2 = {
-  'Doduo': { hp: 35, atk: 85, def: 45, type: ['Normal', 'Volador'], moves: ['Peck', 'Fury Attack'] },
-  'Dodrio': { hp: 60, atk: 110, def: 70, type: ['Normal', 'Volador'], moves: ['Drill Peck', 'Tri Attack'] },
-  'Seel': { hp: 65, atk: 45, def: 55, type: ['Agua'], moves: ['Headbutt', 'Icy Wind'] },
-  'Dewgong': { hp: 90, atk: 70, def: 80, type: ['Agua', 'Hielo'], moves: ['Aurora Beam', 'Surf'] },
-  'Grimer': { hp: 80, atk: 80, def: 50, type: ['Veneno'], moves: ['Pound', 'Sludge'] },
-  'Muk': { hp: 105, atk: 105, def: 75, type: ['Veneno'], moves: ['Sludge Bomb', 'Acid Armor'] },
-  'Shellder': { hp: 30, atk: 65, def: 100, type: ['Agua'], moves: ['Tackle', 'Clamp'] },
-  'Cloyster': { hp: 50, atk: 95, def: 180, type: ['Agua', 'Hielo'], moves: ['Spike Cannon', 'Ice Beam'] },
-  'Gastly': { hp: 30, atk: 35, def: 30, type: ['Fantasma', 'Veneno'], moves: ['Lick', 'Hypnosis'] },
-  'Haunter': { hp: 45, atk: 50, def: 45, type: ['Fantasma', 'Veneno'], moves: ['Lick', 'Shadow Ball'] },
-  'Gengar': { hp: 60, atk: 65, def: 60, type: ['Fantasma', 'Veneno'], moves: ['Shadow Ball', 'Hypnosis'] },
-  'Onix': { hp: 35, atk: 45, def: 160, type: ['Roca', 'Tierra'], moves: ['Rock Throw', 'Bind'] },
-  'Drowzee': { hp: 60, atk: 48, def: 45, type: ['Psíquico'], moves: ['Pound', 'Hypnosis'] },
-  'Hypno': { hp: 85, atk: 73, def: 70, type: ['Psíquico'], moves: ['Psychic', 'Headbutt'] },
-  'Krabby': { hp: 30, atk: 105, def: 90, type: ['Agua'], moves: ['Bubble', 'Vice Grip'] },
-  'Kingler': { hp: 55, atk: 130, def: 115, type: ['Agua'], moves: ['Crabhammer', 'Stomp'] },
-  'Voltorb': { hp: 40, atk: 30, def: 50, type: ['Eléctrico'], moves: ['Tackle', 'Spark'] },
-  'Electrode': { hp: 60, atk: 50, def: 70, type: ['Eléctrico'], moves: ['Thunderbolt', 'Explosion'] },
-  'Exeggcute': { hp: 60, atk: 40, def: 80, type: ['Planta', 'Psíquico'], moves: ['Barrage', 'Hypnosis'] },
-  'Exeggutor': { hp: 95, atk: 95, def: 85, type: ['Planta', 'Psíquico'], moves: ['Psychic', 'Solar Beam'] },
-  'Cubone': { hp: 50, atk: 50, def: 95, type: ['Tierra'], moves: ['Bone Club', 'Headbutt'] },
-  'Marowak': { hp: 60, atk: 80, def: 110, type: ['Tierra'], moves: ['Bonemerang', 'Thrash'] },
-  'Hitmonlee': { hp: 50, atk: 120, def: 53, type: ['Lucha'], moves: ['High Jump Kick', 'Rolling Kick'] },
-  'Hitmonchan': { hp: 50, atk: 105, def: 79, type: ['Lucha'], moves: ['Mach Punch', 'Ice Punch'] },
-  'Lickitung': { hp: 90, atk: 55, def: 75, type: ['Normal'], moves: ['Lick', 'Stomp'] },
-  'Koffing': { hp: 40, atk: 65, def: 95, type: ['Veneno'], moves: ['Smog', 'Sludge'] },
-  'Weezing': { hp: 65, atk: 90, def: 120, type: ['Veneno'], moves: ['Sludge Bomb', 'Explosion'] },
-  'Rhyhorn': { hp: 80, atk: 85, def: 95, type: ['Tierra', 'Roca'], moves: ['Horn Attack', 'Stomp'] },
-  'Rhydon': { hp: 105, atk: 130, def: 120, type: ['Tierra', 'Roca'], moves: ['Earthquake', 'Rock Slide'] },
-  'Chansey': { hp: 250, atk: 5, def: 5, type: ['Normal'], moves: ['Soft-Boiled', 'Double-Edge'] },
-  'Tangela': { hp: 65, atk: 55, def: 115, type: ['Planta'], moves: ['Vine Whip', 'Mega Drain'] },
-  'Kangaskhan': { hp: 105, atk: 95, def: 80, type: ['Normal'], moves: ['Comet Punch', 'Mega Punch'] },
-  'Horsea': { hp: 30, atk: 40, def: 70, type: ['Agua'], moves: ['Bubble', 'Water Gun'] },
-  'Seadra': { hp: 55, atk: 65, def: 95, type: ['Agua'], moves: ['Hydro Pump', 'Twister'] },
-  'Goldeen': { hp: 45, atk: 67, def: 60, type: ['Agua'], moves: ['Peck', 'Supersonic'] },
-  'Seaking': { hp: 80, atk: 92, def: 65, type: ['Agua'], moves: ['Waterfall', 'Horn Drill'] },
-  'Staryu': { hp: 30, atk: 45, def: 55, type: ['Agua'], moves: ['Tackle', 'Water Gun'] },
-  'Starmie': { hp: 60, atk: 75, def: 85, type: ['Agua', 'Psíquico'], moves: ['Surf', 'Psychic'] },
-  'Mr. Mime': { hp: 40, atk: 45, def: 65, type: ['Psíquico'], moves: ['Confusion', 'Barrier'] },
-  'Scyther': { hp: 70, atk: 110, def: 80, type: ['Bicho', 'Volador'], moves: ['Slash', 'Wing Attack'] },
-  'Jynx': { hp: 65, atk: 50, def: 35, type: ['Hielo', 'Psíquico'], moves: ['Ice Punch', 'Lovely Kiss'] },
-  'Electabuzz': { hp: 65, atk: 83, def: 57, type: ['Eléctrico'], moves: ['Thunder Punch', 'Thunderbolt'] },
-  'Magmar': { hp: 65, atk: 95, def: 57, type: ['Fuego'], moves: ['Fire Punch', 'Flamethrower'] },
-  'Pinsir': { hp: 65, atk: 125, def: 100, type: ['Bicho'], moves: ['Vice Grip', 'Submission'] },
-  'Tauros': { hp: 75, atk: 100, def: 95, type: ['Normal'], moves: ['Tackle', 'Take Down'] },
-  'Magikarp': { hp: 20, atk: 10, def: 55, type: ['Agua'], moves: ['Splash', 'Tackle'] },
-  'Gyarados': { hp: 95, atk: 125, def: 79, type: ['Agua', 'Volador'], moves: ['Hydro Pump', 'Dragon Rage'] },
-  'Lapras': { hp: 130, atk: 85, def: 80, type: ['Agua', 'Hielo'], moves: ['Surf', 'Ice Beam'] },
-  'Ditto': { hp: 48, atk: 48, def: 48, type: ['Normal'], moves: ['Transform'] },
-  'Eevee': { hp: 55, atk: 55, def: 50, type: ['Normal'], moves: ['Tackle', 'Quick Attack'] },
-  'Vaporeon': { hp: 130, atk: 65, def: 60, type: ['Agua'], moves: ['Surf', 'Acid Armor'] },
-  'Jolteon': { hp: 65, atk: 65, def: 60, type: ['Eléctrico'], moves: ['Thunderbolt', 'Pin Missile'] },
-  'Flareon': { hp: 65, atk: 130, def: 60, type: ['Fuego'], moves: ['Flamethrower', 'Fire Blast'] },
-  'Porygon': { hp: 65, atk: 60, def: 70, type: ['Normal'], moves: ['Tri Attack', 'Conversion'] },
-  'Omanyte': { hp: 35, atk: 40, def: 100, type: ['Roca', 'Agua'], moves: ['Water Gun', 'Withdraw'] },
-  'Omastar': { hp: 70, atk: 60, def: 125, type: ['Roca', 'Agua'], moves: ['Spike Cannon', 'Hydro Pump'] },
-  'Kabuto': { hp: 30, atk: 80, def: 90, type: ['Roca', 'Agua'], moves: ['Scratch', 'Harden'] },
-  'Kabutops': { hp: 60, atk: 115, def: 105, type: ['Roca', 'Agua'], moves: ['Slash', 'Mega Drain'] },
-  'Aerodactyl': { hp: 80, atk: 105, def: 65, type: ['Roca', 'Volador'], moves: ['Wing Attack', 'Ancient Power'] },
-  'Snorlax': { hp: 160, atk: 110, def: 65, type: ['Normal'], moves: ['Body Slam', 'Rest'] },
-  'Articuno': { hp: 90, atk: 85, def: 100, type: ['Hielo', 'Volador'], moves: ['Ice Beam', 'Blizzard'] },
-  'Zapdos': { hp: 90, atk: 90, def: 85, type: ['Eléctrico', 'Volador'], moves: ['Drill Peck', 'Thunderbolt'] },
-  'Moltres': { hp: 90, atk: 100, def: 90, type: ['Fuego', 'Volador'], moves: ['Fire Blast', 'Sky Attack'] },
-  'Dratini': { hp: 41, atk: 64, def: 45, type: ['Dragón'], moves: ['Wrap', 'Thunder Wave'] },
-  'Dragonair': { hp: 61, atk: 84, def: 65, type: ['Dragón'], moves: ['Slam', 'Dragon Rage'] },
-  'Dragonite': { hp: 91, atk: 134, def: 95, type: ['Dragón', 'Volador'], moves: ['Outrage', 'Wing Attack'] },
-  'Mewtwo': { hp: 106, atk: 110, def: 90, type: ['Psíquico'], moves: ['Psychic', 'Recover'] },
-  'Mew': { hp: 100, atk: 100, def: 100, type: ['Psíquico'], moves: ['Psychic', 'Metronome'] },
-  'Chikorita': { hp: 45, atk: 49, def: 65, type: ['Planta'], moves: ['Tackle', 'Razor Leaf'] },
-  'Bayleef': { hp: 60, atk: 62, def: 80, type: ['Planta'], moves: ['Razor Leaf', 'Reflect'] },
-  'Meganium': { hp: 80, atk: 82, def: 100, type: ['Planta'], moves: ['Solar Beam', 'Synthesis'] },
-  'Cyndaquil': { hp: 39, atk: 52, def: 43, type: ['Fuego'], moves: ['Tackle', 'Ember'] },
-  'Quilava': { hp: 58, atk: 64, def: 58, type: ['Fuego'], moves: ['Flame Wheel', 'Quick Attack'] },
-  'Typhlosion': { hp: 78, atk: 84, def: 78, type: ['Fuego'], moves: ['Flamethrower', 'Thunder Punch'] },
-  'Totodile': { hp: 50, atk: 65, def: 64, type: ['Agua'], moves: ['Scratch', 'Water Gun'] },
-  'Croconaw': { hp: 65, atk: 80, def: 80, type: ['Agua'], moves: ['Bite', 'Water Gun'] },
-  'Feraligatr': { hp: 85, atk: 105, def: 100, type: ['Agua'], moves: ['Hydro Pump', 'Slash'] },
-  'Sentret': { hp: 35, atk: 46, def: 34, type: ['Normal'], moves: ['Tackle', 'Quick Attack'] },
-  'Furret': { hp: 85, atk: 76, def: 64, type: ['Normal'], moves: ['Quick Attack', 'Slam'] },
-  'Hoothoot': { hp: 60, atk: 30, def: 30, type: ['Normal', 'Volador'], moves: ['Peck', 'Hypnosis'] },
-  'Noctowl': { hp: 100, atk: 50, def: 50, type: ['Normal', 'Volador'], moves: ['Take Down', 'Dream Eater'] },
-  'Ledyba': { hp: 40, atk: 20, def: 30, type: ['Bicho', 'Volador'], moves: ['Tackle', 'Comet Punch'] },
-  'Ledian': { hp: 55, atk: 35, def: 50, type: ['Bicho', 'Volador'], moves: ['Comet Punch', 'Reflect'] },
-  'Spinarak': { hp: 40, atk: 60, def: 40, type: ['Bicho', 'Veneno'], moves: ['Poison Sting', 'Constrict'] },
-  'Ariados': { hp: 70, atk: 90, def: 70, type: ['Bicho', 'Veneno'], moves: ['Sludge Bomb', 'Psychic'] }
-};
-
-const POKEMON_PART_3 = {
-  'Crobat': { hp: 85, atk: 90, def: 80, type: ['Veneno', 'Volador'], moves: ['Wing Attack', 'Confuse Ray'] },
-  'Chinchou': { hp: 75, atk: 38, def: 38, type: ['Agua', 'Eléctrico'], moves: ['Bubble', 'Thunder Wave'] },
-  'Lanturn': { hp: 125, atk: 58, def: 58, type: ['Agua', 'Eléctrico'], moves: ['Surf', 'Thunderbolt'] },
-  'Pichu': { hp: 20, atk: 40, def: 15, type: ['Eléctrico'], moves: ['Thunder Shock', 'Charm'] },
-  'Cleffa': { hp: 50, atk: 25, def: 28, type: ['Normal'], moves: ['Pound', 'Charm'] },
-  'Igglybuff': { hp: 90, atk: 30, def: 15, type: ['Normal'], moves: ['Sing', 'Charm'] },
-  'Togepi': { hp: 35, atk: 20, def: 65, type: ['Normal'], moves: ['Metronome', 'Charm'] },
-  'Togetic': { hp: 55, atk: 40, def: 85, type: ['Normal', 'Volador'], moves: ['Double-Edge', 'Metronome'] },
-  'Natu': { hp: 40, atk: 50, def: 45, type: ['Psíquico', 'Volador'], moves: ['Peck', 'Night Shade'] },
-  'Xatu': { hp: 65, atk: 75, def: 70, type: ['Psíquico', 'Volador'], moves: ['Psychic', 'Fly'] },
-  'Mareep': { hp: 55, atk: 40, def: 40, type: ['Eléctrico'], moves: ['Tackle', 'Thunder Shock'] },
-  'Flaaffy': { hp: 70, atk: 55, def: 55, type: ['Eléctrico'], moves: ['Thunder Shock', 'Thunder Wave'] },
-  'Ampharos': { hp: 90, atk: 75, def: 75, type: ['Eléctrico'], moves: ['Thunder Punch', 'Thunder'] },
-  'Bellossom': { hp: 75, atk: 80, def: 85, type: ['Planta'], moves: ['Petal Dance', 'Solar Beam'] },
-  'Marill': { hp: 70, atk: 20, def: 50, type: ['Agua'], moves: ['Tackle', 'Water Gun'] },
-  'Azumarill': { hp: 100, atk: 50, def: 80, type: ['Agua'], moves: ['Bubble Beam', 'Rollout'] },
-  'Sudowoodo': { hp: 70, atk: 100, def: 115, type: ['Roca'], moves: ['Rock Slide', 'Low Kick'] },
-  'Politoed': { hp: 90, atk: 75, def: 75, type: ['Agua'], moves: ['Surf', 'Perish Song'] },
-  'Hoppip': { hp: 35, atk: 35, def: 40, type: ['Planta', 'Volador'], moves: ['Splash', 'Synthesis'] },
-  'Skiploom': { hp: 55, atk: 45, def: 50, type: ['Planta', 'Volador'], moves: ['Tackle', 'Leech Seed'] },
-  'Jumpluff': { hp: 75, atk: 55, def: 70, type: ['Planta', 'Volador'], moves: ['Cotton Spore', 'Mega Drain'] },
-  'Aipom': { hp: 55, atk: 70, def: 55, type: ['Normal'], moves: ['Scratch', 'Baton Pass'] },
-  'Sunkern': { hp: 30, atk: 30, def: 30, type: ['Planta'], moves: ['Absorb', 'Growth'] },
-  'Sunflora': { hp: 75, atk: 75, def: 55, type: ['Planta'], moves: ['Petal Dance', 'Solar Beam'] },
-  'Yanma': { hp: 65, atk: 65, def: 45, type: ['Bicho', 'Volador'], moves: ['Tackle', 'Sonic Boom'] },
-  'Wooper': { hp: 55, atk: 45, def: 45, type: ['Agua', 'Tierra'], moves: ['Water Gun', 'Mud-Slap'] },
-  'Quagsire': { hp: 95, atk: 85, def: 85, type: ['Agua', 'Tierra'], moves: ['Earthquake', 'Surf'] },
-  'Espeon': { hp: 65, atk: 65, def: 60, type: ['Psíquico'], moves: ['Psychic', 'Morning Sun'] },
-  'Umbreon': { hp: 95, atk: 65, def: 110, type: ['Siniestro'], moves: ['Faint Attack', 'Confuse Ray'] },
-  'Murkrow': { hp: 60, atk: 85, def: 42, type: ['Siniestro', 'Volador'], moves: ['Peck', 'Faint Attack'] },
-  'Slowking': { hp: 95, atk: 75, def: 80, type: ['Agua', 'Psíquico'], moves: ['Psychic', 'Surf'] },
-  'Misdreavus': { hp: 60, atk: 60, def: 60, type: ['Fantasma'], moves: ['Psybeam', 'Pain Split'] },
-  'Unown': { hp: 48, atk: 72, def: 48, type: ['Psíquico'], moves: ['Hidden Power'] },
-  'Wobbuffet': { hp: 190, atk: 33, def: 58, type: ['Psíquico'], moves: ['Counter', 'Mirror Coat'] },
-  'Girafarig': { hp: 70, atk: 80, def: 65, type: ['Normal', 'Psíquico'], moves: ['Stomp', 'Psybeam'] },
-  'Pineco': { hp: 50, atk: 65, def: 90, type: ['Bicho'], moves: ['Tackle', 'Self-Destruct'] },
-  'Forretress': { hp: 75, atk: 90, def: 140, type: ['Bicho', 'Acero'], moves: ['Explosion', 'Spikes'] },
-  'Dunsparce': { hp: 100, atk: 70, def: 70, type: ['Normal'], moves: ['Glare', 'Headbutt'] },
-  'Gligar': { hp: 65, atk: 75, def: 105, type: ['Tierra', 'Volador'], moves: ['Poison Sting', 'Faint Attack'] },
-  'Steelix': { hp: 75, atk: 85, def: 200, type: ['Acero', 'Tierra'], moves: ['Iron Tail', 'Earthquake'] },
-  'Snubbull': { hp: 60, atk: 80, def: 50, type: ['Normal'], moves: ['Tackle', 'Bite'] },
-  'Granbull': { hp: 90, atk: 120, def: 75, type: ['Normal'], moves: ['Bite', 'Take Down'] },
-  'Qwilfish': { hp: 65, atk: 95, def: 75, type: ['Agua', 'Veneno'], moves: ['Pin Missile', 'Sludge Bomb'] },
-  'Scizor': { hp: 70, atk: 130, def: 100, type: ['Bicho', 'Acero'], moves: ['Metal Claw', 'Slash'] },
-  'Shuckle': { hp: 20, atk: 10, def: 230, type: ['Bicho', 'Roca'], moves: ['Wrap', 'Toxic'] },
-  'Heracross': { hp: 80, atk: 125, def: 75, type: ['Bicho', 'Lucha'], moves: ['Megahorn', 'Reversal'] },
-  'Sneasel': { hp: 55, atk: 95, def: 55, type: ['Siniestro', 'Hielo'], moves: ['Faint Attack', 'Icy Wind'] },
-  'Teddiursa': { hp: 60, atk: 80, def: 50, type: ['Normal'], moves: ['Scratch', 'Lick'] },
-  'Ursaring': { hp: 90, atk: 130, def: 75, type: ['Normal'], moves: ['Slash', 'Faint Attack'] },
-  'Slugma': { hp: 40, atk: 40, def: 40, type: ['Fuego'], moves: ['Smog', 'Ember'] },
-  'Magcargo': { hp: 50, atk: 50, def: 120, type: ['Fuego', 'Roca'], moves: ['Flamethrower', 'Rock Slide'] },
-  'Swinub': { hp: 50, atk: 50, def: 40, type: ['Hielo', 'Tierra'], moves: ['Tackle', 'Powder Snow'] },
-  'Piloswine': { hp: 100, atk: 100, def: 80, type: ['Hielo', 'Tierra'], moves: ['Blizzard', 'Earthquake'] },
-  'Corsola': { hp: 55, atk: 55, def: 85, type: ['Agua', 'Roca'], moves: ['Bubble Beam', 'Recover'] },
-  'Remoraid': { hp: 35, atk: 65, def: 35, type: ['Agua'], moves: ['Water Gun', 'Aurora Beam'] },
-  'Octillery': { hp: 75, atk: 105, def: 75, type: ['Agua'], moves: ['Octazooka', 'Ice Beam'] },
-  'Delibird': { hp: 45, atk: 55, def: 45, type: ['Hielo', 'Volador'], moves: ['Present'] },
-  'Mantine': { hp: 65, atk: 40, def: 70, type: ['Agua', 'Volador'], moves: ['Bubble Beam', 'Wing Attack'] },
-  'Skarmory': { hp: 65, atk: 80, def: 140, type: ['Acero', 'Volador'], moves: ['Peck', 'Steel Wing'] },
-  'Houndour': { hp: 45, atk: 60, def: 30, type: ['Siniestro', 'Fuego'], moves: ['Ember', 'Bite'] },
-  'Houndoom': { hp: 75, atk: 90, def: 50, type: ['Siniestro', 'Fuego'], moves: ['Crunch', 'Flamethrower'] },
-  'Kingdra': { hp: 75, atk: 95, def: 95, type: ['Agua', 'Dragón'], moves: ['Hydro Pump', 'Dragon Breath'] },
-  'Phanpy': { hp: 90, atk: 60, def: 60, type: ['Tierra'], moves: ['Tackle', 'Rollout'] },
-  'Donphan': { hp: 90, atk: 120, def: 120, type: ['Tierra'], moves: ['Earthquake', 'Rollout'] },
-  'Porygon2': { hp: 85, atk: 80, def: 90, type: ['Normal'], moves: ['Tri Attack', 'Conversion 2'] },
-  'Stantler': { hp: 73, atk: 95, def: 62, type: ['Normal'], moves: ['Stomp', 'Hypnosis'] },
-  'Smeargle': { hp: 55, atk: 20, def: 35, type: ['Normal'], moves: ['Sketch'] },
-  'Tyrogue': { hp: 35, atk: 35, def: 35, type: ['Lucha'], moves: ['Tackle'] },
-  'Hitmontop': { hp: 50, atk: 95, def: 95, type: ['Lucha'], moves: ['Rolling Kick', 'Rapid Spin'] },
-  'Smoochum': { hp: 45, atk: 30, def: 15, type: ['Hielo', 'Psíquico'], moves: ['Pound', 'Sweet Kiss'] },
-  'Elekid': { hp: 45, atk: 63, def: 37, type: ['Eléctrico'], moves: ['Thunder Punch', 'Quick Attack'] },
-  'Magby': { hp: 45, atk: 75, def: 37, type: ['Fuego'], moves: ['Ember', 'Smog'] },
-  'Miltank': { hp: 95, atk: 80, def: 105, type: ['Normal'], moves: ['Stomp', 'Milk Drink'] },
-  'Blissey': { hp: 255, atk: 10, def: 10, type: ['Normal'], moves: ['Soft-Boiled', 'Double-Edge'] },
-  'Raikou': { hp: 90, atk: 85, def: 75, type: ['Eléctrico'], moves: ['Thunder', 'Spark'] },
-  'Entei': { hp: 115, atk: 115, def: 85, type: ['Fuego'], moves: ['Fire Blast', 'Stomp'] },
-  'Suicune': { hp: 100, atk: 75, def: 115, type: ['Agua'], moves: ['Hydro Pump', 'Bubble Beam'] },
-  'Larvitar': { hp: 50, atk: 64, def: 50, type: ['Roca', 'Tierra'], moves: ['Bite', 'Rock Slide'] },
-  'Pupitar': { hp: 70, atk: 84, def: 70, type: ['Roca', 'Tierra'], moves: ['Rock Slide', 'Dark Pulse'] },
-  'Tyranitar': { hp: 100, atk: 134, def: 110, type: ['Roca', 'Siniestro'], moves: ['Crunch', 'Earthquake'] },
-  'Lugia': { hp: 106, atk: 90, def: 130, type: ['Psíquico', 'Volador'], moves: ['Aeroblast', 'Psychic'] },
-  'Ho-Oh': { hp: 106, atk: 130, def: 90, type: ['Fuego', 'Volador'], moves: ['Sacred Fire', 'Brave Bird'] },
-  'Celebi': { hp: 100, atk: 100, def: 100, type: ['Psíquico', 'Planta'], moves: ['Solar Beam', 'Psychic'] }
-};
-
-const POKEMON_SPECIES  = { ...POKEMON_PART_1, ...POKEMON_PART_2, ...POKEMON_PART_3 };
-
-// Structure: Key is the ATTACKER. Values are the DEFENDERS and the multiplier.
-// 1x damage is omitted for efficiency.
-
-const TYPE_CHART = {
-  'Normal': { 'Roca': 0.5, 'Acero': 0.5, 'Fantasma': 0 },
-  'Fuego': { 'Planta': 2, 'Hielo': 2, 'Bicho': 2, 'Acero': 2, 'Fuego': 0.5, 'Agua': 0.5, 'Roca': 0.5, 'Dragón': 0.5 },
-  'Agua': { 'Fuego': 2, 'Tierra': 2, 'Roca': 2, 'Agua': 0.5, 'Planta': 0.5, 'Dragón': 0.5 },
-  'Planta': { 'Agua': 2, 'Tierra': 2, 'Roca': 2, 'Planta': 0.5, 'Fuego': 0.5, 'Veneno': 0.5, 'Volador': 0.5, 'Bicho': 0.5, 'Dragón': 0.5, 'Acero': 0.5 },
-  'Eléctrico': { 'Agua': 2, 'Volador': 2, 'Eléctrico': 0.5, 'Planta': 0.5, 'Dragón': 0.5, 'Tierra': 0 },
-  'Hielo': { 'Planta': 2, 'Tierra': 2, 'Volador': 2, 'Dragón': 2, 'Fuego': 0.5, 'Agua': 0.5, 'Hielo': 0.5, 'Acero': 0.5 },
-  'Lucha': { 'Normal': 2, 'Hielo': 2, 'Roca': 2, 'Siniestro': 2, 'Acero': 2, 'Veneno': 0.5, 'Volador': 0.5, 'Psíquico': 0.5, 'Bicho': 0.5, 'Fantasma': 0 },
-  'Veneno': { 'Planta': 2, 'Veneno': 0.5, 'Tierra': 0.5, 'Roca': 0.5, 'Fantasma': 0.5, 'Acero': 0 },
-  'Tierra': { 'Fuego': 2, 'Eléctrico': 2, 'Veneno': 2, 'Roca': 2, 'Acero': 2, 'Planta': 0.5, 'Bicho': 0.5, 'Volador': 0 },
-  'Volador': { 'Planta': 2, 'Lucha': 2, 'Bicho': 2, 'Eléctrico': 0.5, 'Roca': 0.5, 'Acero': 0.5 },
-  'Psíquico': { 'Lucha': 2, 'Veneno': 2, 'Psíquico': 0.5, 'Acero': 0.5, 'Siniestro': 0 },
-  'Bicho': { 'Planta': 2, 'Psíquico': 2, 'Siniestro': 2, 'Fuego': 0.5, 'Lucha': 0.5, 'Veneno': 0.5, 'Volador': 0.5, 'Fantasma': 0.5, 'Acero': 0.5 },
-  'Roca': { 'Fuego': 2, 'Hielo': 2, 'Volador': 2, 'Bicho': 2, 'Lucha': 0.5, 'Tierra': 0.5, 'Acero': 0.5 },
-  'Fantasma': { 'Psíquico': 2, 'Fantasma': 2, 'Siniestro': 0.5, 'Acero': 0.5, 'Normal': 0 },
-  'Dragón': { 'Dragón': 2, 'Acero': 0.5 },
-  'Acero': { 'Hielo': 2, 'Roca': 2, 'Fuego': 0.5, 'Agua': 0.5, 'Eléctrico': 0.5, 'Acero': 0.5 },
-  'Siniestro': { 'Psíquico': 2, 'Fantasma': 2, 'Lucha': 0.5, 'Siniestro': 0.5, 'Acero': 0.5 }
-};
-
+<script>
 /* =========================================================
    GAME STATE
 ========================================================= */
@@ -1006,6 +514,7 @@ let state = {
   team: [],
   inventory: { balls: 0, potions: 0 },
   streak: 0,
+  badges: 0,
   activeIdx: 0,
   gameMode: 'normal' // 'normal' or 'nuzlocke'
 };
@@ -1027,11 +536,18 @@ class Pokemon {
     this.status = null; // 'BRN', 'PSN', 'PAR', 'SLP', 'FRZ'
     
     // Stats Calculator 
-    this.maxHp = Math.floor(0.01 * (2 * data.hp) * level) + level + 10;
-    this.hp = this.maxHp;
-    this.atk = Math.floor(0.01 * (2 * data.atk) * level) + 5;
-    this.def = Math.floor(0.01 * (2 * data.def) * level) + 5;
+    this.bonusMultiplier = 1.0; // Para el evento de la 8ª medalla
+    this.baseStats = {
+      hp: data.hp, atk: data.atk, def: data.def, 
+      spa: data.sp_atk, spd: data.sp_def, spe: data.speed
+    };
     
+    // In-Battle Stat Stages (-6 to +6)
+    this.stages = { atk:0, def:0, spa:0, spd:0, spe:0 };
+
+    this.recalcStats();
+    this.hp = this.maxHp;
+
     // Move Logic based on Mode
     if (isNuzlocke) {
       // Random moves from global pool
@@ -1046,6 +562,40 @@ class Pokemon {
       this.moves = (data.moves || ['Tackle']).filter(mName => MOVES[mName]);
       if (this.moves.length === 0) this.moves = ['Tackle'];
     }
+  }
+
+  recalcStats() {
+    const mult = this.bonusMultiplier;
+    // HP Formula Simplificada
+    this.maxHp = Math.floor(0.01 * (2 * this.baseStats.hp * mult) * this.level) + this.level + 10;
+    // Base Stats Logic
+    this.atk = Math.floor(0.01 * (2 * this.baseStats.atk * mult) * this.level) + 5;
+    this.def = Math.floor(0.01 * (2 * this.baseStats.def * mult) * this.level) + 5;
+    this.spa = Math.floor(0.01 * (2 * this.baseStats.spa * mult) * this.level) + 5;
+    this.spd = Math.floor(0.01 * (2 * this.baseStats.spd * mult) * this.level) + 5;
+    this.spe = Math.floor(0.01 * (2 * this.baseStats.spe * mult) * this.level) + 5;
+  }
+
+  // Get Stat with Stages and Status modifiers (In-Battle)
+  getStat(statName) {
+    let base = this[statName]; // this.atk, this.spe, etc.
+    let stage = this.stages[statName] || 0;
+    
+    // Stage Multiplier
+    let multiplier = 1.0;
+    if (stage >= 0) multiplier = (2 + stage) / 2;
+    else multiplier = 2 / (2 + Math.abs(stage));
+    
+    let finalVal = Math.floor(base * multiplier);
+
+    // Status Modifiers
+    if (statName === 'spe' && this.status === 'PAR') finalVal = Math.floor(finalVal * 0.5); // Paralysis cuts speed
+
+    return Math.max(1, finalVal);
+  }
+
+  resetStages() {
+    this.stages = { atk:0, def:0, spa:0, spd:0, spe:0 };
   }
 }
 
@@ -1171,6 +721,7 @@ function initGame() {
 function startGame(mode) {
   state.gameMode = mode;
   state.streak = 0;
+  state.badges = 0;
   state.inventory.balls = CONSTANTS.START_BALLS;
   state.inventory.pots = CONSTANTS.START_POTS;
   state.activeIdx = 0;
@@ -1180,7 +731,7 @@ function startGame(mode) {
   if (mode === 'nuzlocke') {
     keys = Object.keys(POKEMON_SPECIES); // Any pokemon
   } else {
-    keys = Object.keys(POKEMON_SPECIES).filter(k => POKEMON_SPECIES[k].tier === 1); // Use filtered tier 1 if exists, else all
+    keys = Object.keys(POKEMON_SPECIES).filter(k => POKEMON_SPECIES[k].tier === 1); 
     if (keys.length === 0) keys = Object.keys(POKEMON_SPECIES);
   }
   
@@ -1207,9 +758,14 @@ function getTeamAverageLevel() {
 }
 
 function startBattle() {
-  // Clear status of player team at start of battle (Requested Feature)
-  state.team.forEach(p => p.status = null);
-
+  // Clear temporary states (status handled in win, but stages reset here)
+  state.team.forEach(p => {
+      p.resetStages();
+      if(p.hp > 0) p.status = null; // Heal Status at start of battle? Original request said "reset after combat".
+  });
+  // Actually, request says status resets AFTER combat. We do that in handleWin/Capture.
+  // But let's ensure Stages are reset.
+  
   // Background
   const bgs = ['bg-forest', 'bg-cave', 'bg-ocean', 'bg-night', 'bg-volcano'];
   const newBg = bgs[Math.floor(Math.random() * bgs.length)];
@@ -1225,7 +781,6 @@ function startBattle() {
   let validKeys = Object.keys(POKEMON_SPECIES);
   
   const pIdx = Math.floor(Math.random() * validKeys.length);
-  // Nuzlocke opponents also get random moves? Yes, consistent with chaos.
   opponent = new Pokemon(validKeys[pIdx], targetLevel, state.gameMode === 'nuzlocke');
   
   const shinyText = opponent.isShiny ? '✨ ' : '';
@@ -1304,13 +859,15 @@ function renderAll() {
   $('balls-val').innerText = state.inventory.balls;
   $('pots-val').innerText = state.inventory.pots;
   $('streak-val').innerText = state.streak;
+  $('badges-val').innerText = state.badges;
 
   const movesHTML = currentP.moves.map(mKey => {
     const m = MOVES[mKey];
     if(!m) return '';
+    const catShort = m.cat === 'Esp' ? 'Esp' : 'Fís';
     return `
     <button class="btn-move type-${m.tipo}" onclick="doTurn('${mKey}')" ${turnLock?'disabled':''}>
-      ${m.nombre}<br><small>${m.tipo} / ${m.poder}</small>
+      ${m.nombre}<br><small>${m.tipo} / ${m.poder} / ${catShort}</small>
     </button>
   `}).join('');
   $('move-controls').innerHTML = movesHTML;
@@ -1324,12 +881,14 @@ function renderAll() {
    BATTLE LOGIC
 ========================================================= */
 async function executeMove(attacker, defender, move, isPlayer) {
+  if(attacker.hp <= 0) return; // Dead check
+
   const atkSlot = isPlayer ? 'player-sprite-slot' : 'opponent-sprite-slot';
   const defSlot = isPlayer ? 'opponent-sprite-slot' : 'player-sprite-slot';
   const atkZone = isPlayer ? 'zone-player' : 'zone-opponent';
   const defZone = isPlayer ? 'zone-opponent' : 'zone-player';
 
-  // Status Check (Start of Turn)
+  // Status Check (Start of Move)
   if (attacker.status === 'FRZ') {
     if(Math.random() < 0.2) {
       attacker.status = null;
@@ -1360,29 +919,64 @@ async function executeMove(attacker, defender, move, isPlayer) {
 
   log(`${isPlayer ? '👊' : '🔻'} ${attacker.name} usa <b>${move.nombre}</b>!`);
   await animateAttack(atkSlot, move.tipo);
-  await shootProjectile(move.tipo, atkZone, defZone);
   
-  const dmg = calcDamage(attacker, defender, move);
-  spawnParticles(move.tipo, $(defSlot));
-  
-  if (dmg.mult === 0) {
-    log(`🚫 ¡No afecta a ${defender.name}!`);
-  } else {
-    if(dmg.mult > 1) log(`⚡ ¡Es súper efectivo!`);
-    if(dmg.mult < 1) log(`🛡️ No es muy efectivo...`);
-    
-    await animateDamage(defSlot);
-    defender.hp = Math.max(0, defender.hp - dmg.amount);
+  // Non-damaging moves (Status only) handling could go here, but for now we assume all have Power except 0
+  if (move.poder > 0 || move.nombre === 'Inversión' || move.nombre === 'Furia Dragón') {
+    await shootProjectile(move.tipo, atkZone, defZone);
+    const dmg = calcDamage(attacker, defender, move);
+    spawnParticles(move.tipo, $(defSlot));
 
-    // Effect Chance
-    if (move.effect && !defender.status && defender.hp > 0) {
-      if (Math.random() < move.chance) {
-        defender.status = move.effect;
-        log(`✨ ¡${defender.name} sufrió <b>${move.effect}</b>!`);
-      }
+    if (dmg.mult === 0) {
+        log(`🚫 ¡No afecta a ${defender.name}!`);
+    } else {
+        if(dmg.mult > 1) log(`⚡ ¡Es súper efectivo!`);
+        if(dmg.mult < 1) log(`🛡️ No es muy efectivo...`);
+        
+        await animateDamage(defSlot);
+        defender.hp = Math.max(0, defender.hp - dmg.amount);
     }
   }
+
+  // Effects (Buffs/Debuffs/Status)
+  if (defender.hp > 0 && move.effect) {
+      if (Math.random() < (move.chance || 1.0)) {
+          applyEffect(attacker, defender, move.effect);
+      }
+  }
 }
+
+function applyEffect(attacker, defender, effect) {
+    // Stat Modifiers
+    if (effect === 'SPD_DOWN') { applyStatChange(defender, 'spe', -1, 'Velocidad'); }
+    else if (effect === 'DEF_DOWN') { applyStatChange(defender, 'def', -1, 'Defensa'); }
+    else if (effect === 'ATK_UP') { applyStatChange(attacker, 'atk', 1, 'Ataque'); }
+    else if (effect === 'DEF_UP') { applyStatChange(attacker, 'def', 1, 'Defensa'); }
+    else if (effect === 'ACC_DOWN') { log(`👁️ Precisión de ${defender.name} bajó.`); } // Simplified
+    else if (effect === 'ALL_UP') {
+        ['atk','def','spa','spd','spe'].forEach(s => attacker.stages[s] = Math.min(6, attacker.stages[s]+1));
+        log(`🌟 ¡Todas las estadísticas de ${attacker.name} subieron!`);
+    }
+    // Status Conditions
+    else if (!defender.status) {
+        const statuses = ['BRN', 'PSN', 'PAR', 'FRZ', 'SLP', 'CON']; // CON = confusion ignored for simplicity in DB usually
+        if (statuses.includes(effect) && effect !== 'CON' && effect !== 'FLI') {
+            defender.status = effect;
+            log(`✨ ¡${defender.name} sufrió <b>${effect}</b>!`);
+        } else if (effect === 'FLI') {
+            // Flinch logic handles in turn order, but since this is execution, FLI applies to NEXT turn if defender hasn't moved.
+            // Simplified: FLI only visual here
+        }
+    }
+}
+
+function applyStatChange(mon, stat, change, statName) {
+    mon.stages[stat] += change;
+    if (mon.stages[stat] > 6) mon.stages[stat] = 6;
+    if (mon.stages[stat] < -6) mon.stages[stat] = -6;
+    const dir = change > 0 ? 'subió' : 'bajó';
+    log(`📉 ${mon.name}: Su ${statName} ${dir}.`);
+}
+
 
 async function runStatusDamage(mon, isPlayer) {
   if (mon.hp <= 0) return;
@@ -1397,53 +991,103 @@ async function runStatusDamage(mon, isPlayer) {
 async function doTurn(moveKey) {
   if(turnLock) return;
   turnLock = true;
-  renderAll(); 
-
+  
   const player = state.team[state.activeIdx];
-  const move = MOVES[moveKey];
-
-  // 1. Player Turn
-  await executeMove(player, opponent, move, true);
-  renderAll();
-
-  if(opponent.hp <= 0) {
-    await handleWin();
-    turnLock = false;
-    renderAll();
-    return;
-  }
-
-  // 2. Opponent Turn
-  await wait(800);
+  const playerMove = MOVES[moveKey];
+  
+  // Opponent Choice
   let oppMoveKey = null;
   if(opponent.moves.length > 0) {
     oppMoveKey = opponent.moves[Math.floor(Math.random() * opponent.moves.length)];
   }
   const oppMove = oppMoveKey ? MOVES[oppMoveKey] : null;
+
+  // Determine Order based on Speed Stats
+  const pSpeed = player.getStat('spe');
+  const oSpeed = opponent.getStat('spe');
   
-  await executeMove(opponent, player, oppMove, false);
-  renderAll();
+  let first, second;
+  let moveFirst, moveSecond;
+  let isPlayerFirst;
 
-  // 3. End of Turn Effects
-  await runStatusDamage(player, true);
-  if(player.hp > 0) await runStatusDamage(opponent, false); // If opponent alive
-  renderAll();
+  // Quick Attack priority check (simplified)
+  const pPrio = (playerMove.nombre === 'Ataque Rápido' || playerMove.nombre === 'Velocidad Extrema') ? 1 : 0;
+  const oPrio = (oppMove && (oppMove.nombre === 'Ataque Rápido' || oppMove.nombre === 'Velocidad Extrema')) ? 1 : 0;
 
-  if(player.hp <= 0) {
-    log(`☠️ ¡${player.name} se debilitó!`);
-    if (state.gameMode === 'nuzlocke') {
-      log(`⚰️ Nuzlocke: ¡${player.name} ha muerto para siempre!`);
-      // Remove dead pokemon
-      state.team.splice(state.activeIdx, 1);
-      // activeIdx might now be out of bounds or point to next pokemon
-      // FIX: Set activeIdx to -1 to force user selection instead of auto-switching to next index
-      state.activeIdx = -1; 
-    }
-    checkDefeat(); 
+  if (pPrio > oPrio) {
+      isPlayerFirst = true;
+  } else if (oPrio > pPrio) {
+      isPlayerFirst = false;
   } else {
-    turnLock = false;
-    renderAll();
+      if (pSpeed >= oSpeed) {
+          if (pSpeed === oSpeed) isPlayerFirst = Math.random() < 0.5;
+          else isPlayerFirst = true;
+      } else {
+          isPlayerFirst = false;
+      }
   }
+
+  if (isPlayerFirst) {
+      first = player; moveFirst = playerMove;
+      second = opponent; moveSecond = oppMove;
+  } else {
+      first = opponent; moveFirst = oppMove;
+      second = player; moveSecond = playerMove;
+  }
+
+  renderAll(); // Disable buttons
+
+  // ACTION 1
+  await executeMove(first, second, moveFirst, isPlayerFirst);
+  renderAll();
+
+  // Check Death 1
+  if (second.hp <= 0) {
+      await handleDeath(second, !isPlayerFirst);
+      return;
+  }
+
+  await wait(500);
+
+  // ACTION 2
+  await executeMove(second, first, moveSecond, !isPlayerFirst);
+  renderAll();
+
+  // Check Death 2
+  if (first.hp <= 0) {
+      await handleDeath(first, isPlayerFirst);
+      return;
+  }
+
+  // End Turn Effects
+  await runStatusDamage(player, true);
+  if (player.hp > 0) await runStatusDamage(opponent, false);
+  renderAll();
+
+  if (player.hp <= 0) {
+      await handleDeath(player, true);
+  } else if (opponent.hp <= 0) {
+      await handleDeath(opponent, false);
+  } else {
+      turnLock = false;
+      renderAll();
+  }
+}
+
+async function handleDeath(mon, isPlayer) {
+    log(`☠️ ¡${mon.name} se debilitó!`);
+    if (isPlayer) {
+        if (state.gameMode === 'nuzlocke') {
+            log(`⚰️ Nuzlocke: ¡${mon.name} ha muerto para siempre!`);
+            state.team.splice(state.activeIdx, 1);
+            state.activeIdx = -1;
+        }
+        checkDefeat();
+    } else {
+        await handleWin();
+        turnLock = false;
+        renderAll();
+    }
 }
 
 function calcDamage(atkMon, defMon, move) {
@@ -1455,13 +1099,32 @@ function calcDamage(atkMon, defMon, move) {
   }
   if (mult === 0) return { amount: 0, mult: 0 }; 
 
-  // Burn reduces physical damage
-  let atkStat = atkMon.atk;
-  if (atkMon.status === 'BRN' && move.cat === 'Fis') atkStat = Math.floor(atkStat * 0.5);
+  // Determine Stats based on Category (Phys vs Special)
+  let aStat, dStat;
+  if (move.cat === 'Fis') {
+      aStat = atkMon.getStat('atk');
+      dStat = defMon.getStat('def');
+      // Burn reduces physical damage
+      if (atkMon.status === 'BRN') aStat = Math.floor(aStat * 0.5);
+  } else {
+      aStat = atkMon.getStat('spa');
+      dStat = defMon.getStat('spd');
+  }
 
-  const ad = move.cat === 'Fis' ? (atkStat / defMon.def) : ((atkMon.spa || atkStat) / (defMon.spd || defMon.def));
-  const base = ((2 * atkMon.level / 5 + 2) * move.poder * ad) / 50 + 2;
-  const total = Math.floor(base * mult * (Math.random() * 0.15 + 0.85)); 
+  // Fixed Damage Moves
+  if (move.nombre === 'Furia Dragón') return { amount: 40, mult: 1 };
+  // Reversal logic skipped for brevity, defaults to standard
+
+  const base = ((2 * atkMon.level / 5 + 2) * move.poder * (aStat / dStat)) / 50 + 2;
+  
+  // Critical Hit (Random 6.25%)
+  let critical = 1;
+  if (Math.random() < 0.0625) { critical = 1.5; log('🎯 ¡Golpe Crítico!'); }
+
+  // STAB
+  let stab = atkMon.types.includes(move.tipo) ? 1.5 : 1;
+
+  const total = Math.floor(base * mult * stab * critical * (Math.random() * 0.15 + 0.85)); 
   return { amount: total, mult: mult };
 }
 
@@ -1471,14 +1134,36 @@ function calcDamage(atkMon, defMon, move) {
 async function handleWin() {
   log(`🏆 ¡Ganaste! ${opponent.name} debilitado.`);
   state.streak++;
+
+  // --- Badge Logic ---
+  if (state.streak % 5 === 0) {
+      state.badges++;
+      log(`🏅 <b>¡Has conseguido una Medalla de Gimnasio!</b> (Total: ${state.badges})`);
+  }
+
+  // --- Special Event: 8th Badge (Win 72) ---
+  if (state.streak === 40) {
+      log(`🌟 <b>¡HITO LEGENDARIO!</b> Has conseguido las 8 Medallas.`);
+      const rewardMon = state.team[state.activeIdx] || state.team[0];
+      if (rewardMon) {
+          rewardMon.isShiny = true;
+          rewardMon.bonusMultiplier = 1.3; // 30% Boost
+          rewardMon.recalcStats();
+          rewardMon.hp = rewardMon.maxHp; // Heal as prize
+          log(`✨💎 ¡Tu <b>${rewardMon.name}</b> ahora es Shiny y un 30% más fuerte!`);
+          await wait(2000);
+      }
+  }
   
   const teamSizeBonus = 1 + (state.team.length * 0.15); 
   const baseXP = ((opponent.level * 40) + 100) * CONSTANTS.XP_MULT * teamSizeBonus; 
   const shareXP = Math.floor(baseXP / state.team.length);
   
+  // Clear Player Status on Win
+  state.team.forEach(p => p.status = null);
+
   for (let i = 0; i < state.team.length; i++) {
     const member = state.team[i];
-    // Nuzlocke check: already removed if dead? 
     if (member.hp <= 0) continue; 
 
     let gain = (i === state.activeIdx) ? Math.floor(shareXP * 1.3) : shareXP;
@@ -1488,8 +1173,8 @@ async function handleWin() {
       member.xp -= member.xpToNext;
       member.level++;
       member.xpToNext = member.level * 60 + 100;
-      member.maxHp += 2; member.hp = Math.min(member.hp + 2, member.maxHp); 
-      member.atk += 1; member.def += 1;
+      member.recalcStats(); // Recalc on level up
+      member.hp = Math.min(member.hp + 5, member.maxHp); 
       log(`🆙 ¡${member.name} subió al Nvl ${member.level}!`);
       await checkEvolutionAndMoves(member);
       member.hp = member.maxHp;
@@ -1515,7 +1200,17 @@ async function checkEvolutionAndMoves(player) {
     if(POKEMON_SPECIES[result]) {
       const oldName = player.name;
       player.name = result;
-      player.maxHp += 15; player.hp += 15; player.atk += 10; player.def += 10;
+      // Recalc stats for new species
+      player.baseStats = {
+          hp: POKEMON_SPECIES[result].hp,
+          atk: POKEMON_SPECIES[result].atk,
+          def: POKEMON_SPECIES[result].def,
+          spa: POKEMON_SPECIES[result].sp_atk,
+          spd: POKEMON_SPECIES[result].sp_def,
+          spe: POKEMON_SPECIES[result].speed
+      };
+      player.recalcStats();
+      player.hp = player.maxHp;
       log(`✨ ¡Tu ${oldName} evolucionó a <b>${player.name}</b>!`);
       await wait(1000); 
     }
@@ -1590,7 +1285,7 @@ function promptForgetMove(player, newMove) {
 function checkDefeat() {
   const alive = state.team.some(p => p.hp > 0);
   if(!alive) {
-    log(`💀 Game Over. Racha final: ${state.streak}`);
+    log(`💀 Game Over. Racha final: ${state.streak} | Medallas: ${state.badges}`);
     $('start-buttons').style.display = 'flex';
     $('btn-normal').innerText = 'Reintentar (Normal)';
     $('btn-nuzlocke').innerText = 'Reintentar (Nuzlocke)';
@@ -1614,6 +1309,8 @@ function usePotion() {
     p.hp = Math.min(p.maxHp, p.hp + healAmount);
     log(`💊 Usaste Poción. ${p.name} recuperó ${healAmount} PS.`);
     renderAll();
+    
+    // Potions take a turn, so Opponent attacks freely
     setTimeout(async () => {
       let oppMoveKey = null;
       if(opponent.moves.length > 0) {
@@ -1630,13 +1327,7 @@ function usePotion() {
       renderAll();
 
       if(p.hp <= 0) {
-        log(`☠️ ¡${p.name} se debilitó!`);
-        if (state.gameMode === 'nuzlocke') {
-            log(`⚰️ Nuzlocke: ¡${p.name} ha muerto para siempre!`);
-            state.team.splice(state.activeIdx, 1);
-            state.activeIdx = -1;
-        }
-        checkDefeat();
+        await handleDeath(p, true);
       } else {
          turnLock = false;
          renderAll();
@@ -1675,7 +1366,8 @@ async function attemptCapture() {
     opponent.xp = 0;
     opponent.xpToNext = opponent.level * 60 + 100;
     opponent.hp = opponent.maxHp; 
-    opponent.status = null; // Clear enemy status on capture
+    opponent.status = null; 
+    opponent.resetStages();
 
     if (state.team.length < CONSTANTS.MAX_TEAM) {
       state.team.push(opponent);
@@ -1687,6 +1379,7 @@ async function attemptCapture() {
   } else {
     log(`💢 ¡${opponent.name} se liberó!`);
     
+    // Enemy attacks on fail capture
     let oppMoveKey = null;
     if(opponent.moves.length > 0) {
       oppMoveKey = opponent.moves[Math.floor(Math.random() * opponent.moves.length)];
@@ -1695,22 +1388,14 @@ async function attemptCapture() {
 
     await executeMove(opponent, state.team[state.activeIdx], oppMove, false);
     
-    // Post-Turn Status Damage
     const p = state.team[state.activeIdx];
     await runStatusDamage(p, true);
     if(p.hp > 0) await runStatusDamage(opponent, false);
 
     renderAll();
     
-    if(state.team[state.activeIdx] && state.team[state.activeIdx].hp <= 0) {
-        const player = state.team[state.activeIdx];
-        log(`☠️ ¡${player.name} se debilitó!`);
-        if (state.gameMode === 'nuzlocke') {
-            log(`⚰️ Nuzlocke: ¡${player.name} ha muerto para siempre!`);
-            state.team.splice(state.activeIdx, 1);
-            state.activeIdx = -1;
-        }
-        checkDefeat();
+    if(p.hp <= 0) {
+        await handleDeath(p, true);
     } else {
         turnLock = false;
         renderAll();
@@ -1799,9 +1484,12 @@ function doSwitch(idx, forced) {
       const oppMove = oppMoveKey ? MOVES[oppMoveKey] : null;
       log(`🔻 El rival aprovecha el cambio.`);
       await executeMove(opponent, p, oppMove, false);
-      turnLock = false;
+      
+      await runStatusDamage(p, true);
       renderAll();
-      if(p.hp <= 0) checkDefeat();
+
+      if(p.hp <= 0) await handleDeath(p, true);
+      else turnLock = false;
     }, 1000);
   } else {
     turnLock = false;
@@ -1821,19 +1509,27 @@ function loadGame() {
   if(data) {
     try {
       const rawState = JSON.parse(data);
-      state = rawState;
-      // Data integrity checks
-      state.team.forEach(p => {
-        if(p.isShiny === undefined) p.isShiny = false;
-        if(p.status === undefined) p.status = null;
-      });
+      // Rehydrate Class Methods
+      state = {
+          ...rawState,
+          team: rawState.team.map(d => {
+              const p = new Pokemon(d.name, d.level);
+              Object.assign(p, d);
+              return p;
+          })
+      };
+      opponent = new Pokemon(opponent ? opponent.name : 'Rattata', 5); // Dummy rehydrate or restart battle
+
       if (!state.gameMode) state.gameMode = 'normal';
+      if (state.badges === undefined) state.badges = 0;
 
       $('start-buttons').style.display = 'none';
       $('game-title').classList.add('hidden-title');
       $('mode-display').innerText = state.gameMode === 'nuzlocke' ? '☠️ Nuzlocke' : 'Normal';
-      startBattle();
+      
+      startBattle(); // Restart battle gen to avoid sync issues
     } catch(e) {
+      console.error(e);
       alert("Error al cargar partida.");
     }
   }
