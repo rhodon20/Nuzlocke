@@ -711,6 +711,15 @@ async function animateDamage(victimSlotId) {
   $('battle-scene').classList.remove('shake-screen');
 }
 
+// 1. Añade esta función auxiliar para calcular el Tier según el Nivel
+function getTierFromLevel(level) {
+  if (level <= 15) return 1;
+  if (level <= 30) return 2;
+  if (level <= 45) return 3;
+  if (level <= 60) return 4;
+  return 5; // Nivel 61 en adelante
+}
+
 /* =========================================================
    CORE LOGIC
 ========================================================= */
@@ -757,34 +766,51 @@ function getTeamAverageLevel() {
   return Math.floor(total / state.team.length);
 }
 
+// 2. Sustituye el inicio de tu función startBattle por este bloque:
 function startBattle() {
-  // Clear temporary states (status handled in win, but stages reset here)
+  // Clear temporary states
   state.team.forEach(p => {
       p.resetStages();
-      if(p.hp > 0) p.status = null; // Heal Status at start of battle? Original request said "reset after combat".
+      if(p.hp > 0) p.status = null;
   });
-  // Actually, request says status resets AFTER combat. We do that in handleWin/Capture.
-  // But let's ensure Stages are reset.
-  
-  // Background
+
+  // Background logic (sin cambios)
   const bgs = ['bg-forest', 'bg-cave', 'bg-ocean', 'bg-night', 'bg-volcano'];
   const newBg = bgs[Math.floor(Math.random() * bgs.length)];
   $('battle-scene').className = newBg;
 
-  // Opponent Gen
+  // --- NUEVA LÓGICA DE GENERACIÓN DE OPONENTE ---
   const avgLevel = getTeamAverageLevel();
   let targetLevel;
-  if (avgLevel < 15) targetLevel = Math.max(2, avgLevel - 2 + Math.floor(Math.random() * 3)); 
-  else if (avgLevel < 30) targetLevel = avgLevel + Math.floor(Math.random() * 2); 
-  else targetLevel = avgLevel + Math.floor(Math.random() * 4);
   
-  let validKeys = Object.keys(POKEMON_SPECIES);
-  
+  // Cálculo de nivel del rival (ligeramente ajustado para variedad)
+  if (avgLevel < 15) targetLevel = Math.max(2, avgLevel - 2 + Math.floor(Math.random() * 4)); 
+  else if (avgLevel < 30) targetLevel = avgLevel + Math.floor(Math.random() * 3); 
+  else targetLevel = avgLevel + Math.floor(Math.random() * 5);
+
+  // Determinar el Tier máximo permitido para este nivel
+  const currentTier = getTierFromLevel(targetLevel);
+
+  // Filtramos: Solo aparecen Pokémon cuyo spawnTier sea menor o igual al Tier actual.
+  // Esto evita que salga un Legendario (Tier 5) si estás en nivel 5 (Tier 1),
+  // pero permite que salga un Rattata (Tier 1) aunque estés en nivel 50.
+  let validKeys = Object.keys(POKEMON_SPECIES).filter(key => {
+    const pData = POKEMON_SPECIES[key];
+    // Si no tiene spawnTier definido, asumimos 1 por seguridad
+    const pTier = pData.spawnTier || 1; 
+    return pTier <= currentTier;
+  });
+
+  // Fallback por si el filtro vacía la lista (no debería pasar si configuras bien el JS)
+  if (validKeys.length === 0) validKeys = Object.keys(POKEMON_SPECIES);
+
   const pIdx = Math.floor(Math.random() * validKeys.length);
   opponent = new Pokemon(validKeys[pIdx], targetLevel, state.gameMode === 'nuzlocke');
   
+  // ... resto de la función startBattle (logs, renderAll, etc.) ...
+  
   const shinyText = opponent.isShiny ? '✨ ' : '';
-  log(`⚠️ ¡Un ${shinyText}<b>${opponent.name}</b> Nvl ${opponent.level} salvaje apareció!`);
+  log(`⚠️ ¡Un ${shinyText}<b>${opponent.name}</b> Nvl ${opponent.level} (Tier ${currentTier}) salvaje apareció!`);
   
   turnLock = false; 
   renderAll();
@@ -1136,13 +1162,13 @@ async function handleWin() {
   state.streak++;
 
   // --- Badge Logic ---
-  if (state.streak % 5 === 0) {
+  if (state.streak % 9 === 0) {
       state.badges++;
       log(`🏅 <b>¡Has conseguido una Medalla de Gimnasio!</b> (Total: ${state.badges})`);
   }
 
   // --- Special Event: 8th Badge (Win 72) ---
-  if (state.streak === 40) {
+  if (state.streak === 72) {
       log(`🌟 <b>¡HITO LEGENDARIO!</b> Has conseguido las 8 Medallas.`);
       const rewardMon = state.team[state.activeIdx] || state.team[0];
       if (rewardMon) {
@@ -1466,7 +1492,8 @@ function closeSwitchMenu() {
 }
 
 function doSwitch(idx, forced) {
-  if(idx === state.activeIdx && !state.team[idx].hp <= 0) {
+  // Si elegimos al mismo que ya está activo y está vivo, solo cerramos
+  if(idx === state.activeIdx && state.team[idx].hp > 0) {
     closeSwitchMenu();
     return;
   }
@@ -1478,20 +1505,41 @@ function doSwitch(idx, forced) {
   
   if(!forced) {
     turnLock = true;
-    setTimeout(async () => {
-      const p = state.team[state.activeIdx];
-      const oppMoveKey = opponent.moves[Math.floor(Math.random()*opponent.moves.length)];
-      const oppMove = oppMoveKey ? MOVES[oppMoveKey] : null;
-      log(`🔻 El rival aprovecha el cambio.`);
-      await executeMove(opponent, p, oppMove, false);
-      
-      await runStatusDamage(p, true);
-      renderAll();
+    renderAll(); // Forzamos render para que se deshabiliten los botones visualmente
 
-      if(p.hp <= 0) await handleDeath(p, true);
-      else turnLock = false;
+    setTimeout(async () => {
+      try {
+        const p = state.team[state.activeIdx];
+        
+        // Elección de movimiento del rival
+        let oppMoveKey = null;
+        if(opponent.moves && opponent.moves.length > 0) {
+          oppMoveKey = opponent.moves[Math.floor(Math.random() * opponent.moves.length)];
+        }
+        const oppMove = oppMoveKey ? MOVES[oppMoveKey] : null;
+        
+        log(`🔻 El rival aprovecha el cambio.`);
+        await executeMove(opponent, p, oppMove, false);
+        
+        // Daño de estado post-turno (quemadura/veneno) si aplica
+        await runStatusDamage(p, true);
+        renderAll();
+
+        // Verificamos si murió tras el golpe
+        if(p.hp <= 0) {
+          await handleDeath(p, true);
+        } else {
+          turnLock = false; // <--- Importante: Desbloquear si sobrevive
+        }
+      } catch (e) {
+        console.error("Error durante el cambio:", e);
+        turnLock = false; // <--- SEGURIDAD: Si algo falla, desbloqueamos igual
+      } finally {
+        renderAll();
+      }
     }, 1000);
   } else {
+    // Cambio forzado (por muerte anterior), no hay turno de castigo
     turnLock = false;
     renderAll();
   }
