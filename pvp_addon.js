@@ -23,7 +23,7 @@ window.addEventListener('load', () => {
     const btnContainer = document.getElementById('start-buttons');
     if (btnContainer) {
         const btnPvP = document.createElement('button');
-        btnPvP.innerHTML = "⚔️ 1 vs 1 (Local)";
+        btnPvP.innerHTML = "⚔️ 1 vs 1 (Local - Nuzlocke a ciegas)";
         btnPvP.style.background = "linear-gradient(135deg, #d32f2f, #b71c1c)";
         btnPvP.style.color = "#fff";
         btnPvP.style.padding = "14px";
@@ -389,4 +389,5 @@ function endPvPGame(p1Wins) {
             </button>
         </div>
     `;
+
 }
