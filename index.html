@@ -506,6 +506,9 @@ const SLUG_MAP = {
 <script src="evolutions.js"></script>
 <script src="types.js"></script>
 <script src="pvp_addon.js"></script>
+<script src="ia_logic.js"></script>
+<script src="abilities.js"></script>
+<script src="info_addon.js"></script>
 <script>
 /* =========================================================
    GAME STATE
@@ -724,6 +727,9 @@ function getTierFromLevel(level) {
    CORE LOGIC
 ========================================================= */
 function initGame() {
+  // --- AÑADE ESTA LÍNEA AQUÍ ---
+  if(typeof initAbilities === 'function') initAbilities();
+  
   $('btn-load').disabled = !localStorage.getItem('poke_save');
 }
 
@@ -826,12 +832,15 @@ function renderAll() {
   
   if(!currentP) return;
 
-  const renderBox = (mon, id, isPlayer) => {
+const renderBox = (mon, id, isPlayer) => {
     const hpPct = (mon.hp / mon.maxHp) * 100;
     const color = hpPct > 50 ? '#4caf50' : hpPct > 20 ? '#ffeb3b' : '#f44336';
     const container = $(id);
     const shinyMark = mon.isShiny ? '<span style="color:gold; text-shadow:0 0 5px orange">✨</span> ' : '';
-    
+
+    // --- Muestra la habilidad tanto en el jugador como en el rival ---
+    const abilityHTML = mon.ability ? `<div style="font-size:0.7rem; color:#ffd54a; font-weight:bold; margin-top:-2px; margin-bottom:2px;">Hb: ${mon.ability}</div>` : '';
+
     let xpHTML = '';
     if (isPlayer) {
       const xpPct = (mon.xp / mon.xpToNext) * 100;
@@ -842,6 +851,7 @@ function renderAll() {
 
     container.innerHTML = `
       <div class="poke-name"><span>${shinyMark}${mon.name}</span> <span class="poke-lvl">Nv${mon.level}</span></div>
+      ${abilityHTML}
       <div class="hp-container">
         <div class="hp-fill" style="width:${hpPct}%; background:${color}"></div>
       </div>
