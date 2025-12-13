@@ -1172,13 +1172,13 @@ async function handleWin() {
   state.streak++;
 
   // --- Badge Logic ---
-  if (state.streak % 9 === 0) {
+  if (state.streak % 5 === 0) {
       state.badges++;
       log(`🏅 <b>¡Has conseguido una Medalla de Gimnasio!</b> (Total: ${state.badges})`);
   }
 
   // --- Special Event: 8th Badge (Win 72) ---
-  if (state.streak === 72) {
+  if (state.streak === 40) {
       log(`🌟 <b>¡HITO LEGENDARIO!</b> Has conseguido las 8 Medallas.`);
       const rewardMon = state.team[state.activeIdx] || state.team[0];
       if (rewardMon) {
