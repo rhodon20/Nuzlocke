@@ -1,6 +1,7 @@
 /* =========================================================
    ABILITIES SYSTEM (Rogue Randomizer Edition)
    Description: 50 Habilidades aleatorias y sus efectos.
+   FIX: Ahora las estadísticas pasivas se reflejan en la UI.
 ========================================================= */
 
 // --- BASE DE DATOS DE 50 HABILIDADES (Global) ---
@@ -14,8 +15,8 @@ const ABILITIES_DATA = {
     'Autoestima':     { desc: 'Sube Ataque al derrotar a un rival.', onKill: (user) => applyStatChange(user, 'atk', 1, 'Ataque') },
     
     // --- BUFFS CONDICIONALES ---
-    'Agallas':        { desc: 'Sube Ataque si sufre estado.', cond: (u) => u.status !== null, dmgMult: 1.5 },
-    'Escama Especial':{ desc: 'Sube Defensa si sufre estado.', cond: (u) => u.status !== null, defMult: 1.5 },
+    'Agallas':        { desc: 'Sube Ataque x1.5 si sufre estado.', cond: (u) => u.status !== null, dmgMult: 1.5 },
+    'Escama Especial':{ desc: 'Sube Defensa x1.5 si sufre estado.', cond: (u) => u.status !== null, defMult: 1.5 },
     'Espesura':       { desc: '+50% a Planta con poca vida.', typeBoost: 'Planta', hpThreshold: 0.33 },
     'Mar Llamas':     { desc: '+50% a Fuego con poca vida.', typeBoost: 'Fuego', hpThreshold: 0.33 },
     'Torrente':       { desc: '+50% a Agua con poca vida.', typeBoost: 'Agua', hpThreshold: 0.33 },
@@ -44,7 +45,7 @@ const ABILITIES_DATA = {
     'Foco Interno':   { desc: 'Evita el retroceso.', preventFlinch: true },
     'Muro Mágico':    { desc: 'Inmune a daño indirecto (Veneno/Quemadura).', noIndirectDmg: true },
 
-    // --- AL ENTRAR AL COMBATE (ENTRY HAZARDS/BUFFS) ---
+    // --- AL ENTRAR AL COMBATE ---
     'Intimidación':   { desc: 'Baja el Ataque del rival.', onEntry: (u, t) => applyStatChange(t, 'atk', -1, 'Ataque') },
     'Llovizna':       { desc: 'Invoca lluvia (Potencia Agua).', onEntry: (u) => log(`🌧️ <b>${u.name}</b> invoca lluvia eterna.`), globalType: 'Agua' },
     'Sequía':         { desc: 'Invoca sol (Potencia Fuego).', onEntry: (u) => log(`☀️ <b>${u.name}</b> hace brillar el sol.`), globalType: 'Fuego' },
@@ -52,44 +53,55 @@ const ABILITIES_DATA = {
     'Rastro':         { desc: 'Copia la habilidad del rival.', onEntry: (u, t) => { if(t.ability){ u.ability = t.ability; log(`🧬 ${u.name} rastreó ${t.ability}!`); } } },
     'Descarga Adren.':{ desc: 'Sube Velocidad al entrar.', onEntry: (u) => applyStatChange(u, 'spe', 1, 'Velocidad') },
 
-    // --- EFECTOS AL CONTACTO (DEFENSIVOS) ---
+    // --- EFECTOS AL CONTACTO ---
     'Piel Tosca':     { desc: 'Daña al rival si hace contacto.', onContact: (attacker) => { damagePercent(attacker, 0.12); log(`🌵 ¡${attacker.name} se hirió con la piel tosca!`); } },
     'Cuerpo Llama':   { desc: 'Quema al contacto (30%).', onContact: (attacker) => tryStatus(attacker, 'BRN', 0.3) },
     'Estática':       { desc: 'Paraliza al contacto (30%).', onContact: (attacker) => tryStatus(attacker, 'PAR', 0.3) },
     'Punto Tóxico':   { desc: 'Envenena al contacto (30%).', onContact: (attacker) => tryStatus(attacker, 'PSN', 0.3) },
     'Cuerpo Maldito': { desc: 'Baja Ataque al contacto (30%).', onContact: (attacker) => { if(Math.random()<0.3) applyStatChange(attacker,'atk',-1,'Ataque'); } },
     
-    // --- EFECTOS AL ATACAR (OFENSIVOS) ---
+    // --- OFENSIVOS ---
     'Dicha':          { desc: 'Doble probabilidad de efectos secundarios.', effectChanceMult: 2.0 },
-    'Puño Invisible': { desc: 'Los ataques nunca fallan (Cosmético en este juego).', noMiss: true },
+    'Puño Invisible': { desc: 'Los ataques nunca fallan.', noMiss: true },
     'Rompemoldes':    { desc: 'Ignora habilidades defensivas del rival.', ignoreDefAbility: true },
     'Vampirismo':     { desc: 'Cura un poco al hacer daño.', drain: 0.2 },
 };
 
-/* =========================================================
-   LOGIC INJECTION WRAPPER
-   Se llama desde index.html para asegurar que 'Pokemon' existe
-========================================================= */
 function initAbilities() {
     console.log("Iniciando sistema de habilidades...");
+    if (typeof Pokemon === 'undefined') return;
 
-    if (typeof Pokemon === 'undefined') {
-        console.error("❌ Error Crítico: La clase Pokemon no existe. Asegúrate de llamar a initAbilities() DESPUÉS de definir la clase en index.html.");
-        return;
-    }
-
-    // 1. MODIFICAR CONSTRUCTOR
+    // 1. MODIFICAR CONSTRUCTOR (Asignación)
     const originalPokemonConstAbil = Pokemon;
     Pokemon = class extends originalPokemonConstAbil {
         constructor(name, level, isNuzlocke) {
             super(name, level, isNuzlocke);
-            // Selección aleatoria
             const keys = Object.keys(ABILITIES_DATA);
             this.ability = keys[Math.floor(Math.random() * keys.length)];
         }
     };
 
-    // 2. HOOKS DE ENTRADA
+    // 2. MODIFICAR GETSTAT (Para que la UI muestre el valor real)
+    // Esto hace que "Polvo Metálico" muestre el doble de defensa en la ventana de Info.
+    const originalGetStat = Pokemon.prototype.getStat;
+    Pokemon.prototype.getStat = function(statName) {
+        let val = originalGetStat.call(this, statName);
+        const data = ABILITIES_DATA[this.ability] || {};
+        
+        // Aplicar Stat Mod (Ej: Polvo Metálico, Potencia Bruta)
+        if (data.statMod && data.statMod.stat === statName) {
+            val = Math.floor(val * data.statMod.mult);
+        }
+        
+        // Aplicar buffs condicionales (Ej: Escama Especial)
+        if (statName === 'def' && data.defMult && data.cond && data.cond(this)) {
+            val = Math.floor(val * data.defMult);
+        }
+        
+        return val;
+    };
+
+    // 3. HOOKS DE ENTRADA
     const originalStartBattleAbil = window.startBattle;
     window.startBattle = function() {
         originalStartBattleAbil();
@@ -108,7 +120,7 @@ function initAbilities() {
         }, 1100);
     };
 
-    // 3. CÁLCULO DE DAÑO MODIFICADO
+    // 4. CÁLCULO DE DAÑO MODIFICADO (Simplificado gracias al nuevo getStat)
     window.calcDamage = function(atkMon, defMon, move) {
         const atkData = ABILITIES_DATA[atkMon.ability] || {};
         const defData = ABILITIES_DATA[defMon.ability] || {};
@@ -121,6 +133,7 @@ function initAbilities() {
                 const heal = Math.floor(defMon.maxHp * 0.25);
                 defMon.hp = Math.min(defMon.maxHp, defMon.hp + heal);
                 log(`💚 ${defMon.name} recuperó vida.`);
+                if(window.renderAll) window.renderAll();
             }
             if (defData.buffOnHit) applyStatChange(defMon, defData.buffOnHit, 1, 'Stats');
             return { amount: 0, mult: 0 };
@@ -141,23 +154,23 @@ function initAbilities() {
         }
         if (mult === 0) return { amount: 0, mult: 0 };
 
-        // Stats
+        // Stats (getStat YA INCLUYE los multiplicadores fijos como Potencia Bruta)
         let aStat, dStat;
         if (move.cat === 'Fis') {
             aStat = atkMon.getStat('atk');
-            if (atkData.statMod && atkData.statMod.stat === 'atk') aStat *= atkData.statMod.mult;
-            if (atkData.cond && atkData.cond(atkMon)) aStat *= (atkData.dmgMult || 1);
+            
+            // Agallas (es condicional, NO se aplica en getStat para no romper UI base, se aplica aquí como extra de daño)
+            if (atkData.cond && atkData.cond(atkMon) && atkData.dmgMult) aStat *= atkData.dmgMult;
+            
+            // Quemadura (Ignífugo/Agallas evitan reducción)
             if (atkMon.status === 'BRN' && atkMon.ability !== 'Agallas') aStat = Math.floor(aStat * 0.5);
             
             dStat = defMon.getStat('def');
-            if (defData.statMod && defData.statMod.stat === 'def') dStat *= defData.statMod.mult;
-            if (defData.cond && defData.cond(defMon)) dStat *= (defData.defMult || 1);
         } else {
             aStat = atkMon.getStat('spa');
-            if (atkData.statMod && atkData.statMod.stat === 'spa') aStat *= atkData.statMod.mult;
             dStat = defMon.getStat('spd');
-            if (defData.statMod && defData.statMod.stat === 'spd') dStat *= defData.statMod.mult;
         }
+        
         if (atkData.globalType === move.tipo) aStat *= 1.5; // Clima
 
         if (move.nombre === 'Furia Dragón') return { amount: 40, mult: 1 };
@@ -169,7 +182,7 @@ function initAbilities() {
         if (atkData.movePowerThresh && move.poder <= atkData.movePowerThresh) base *= atkData.dmgMult;
         if (atkData.nameContains && move.nombre.includes(atkData.nameContains)) base *= atkData.dmgMult;
 
-        // Critico
+        // Crítico
         let critChance = atkData.critChance || 0.0625;
         let critical = (Math.random() < critChance) ? (atkData.critMult || 1.5) : 1;
         if (critical > 1) log('🎯 ¡Golpe Crítico!');
@@ -185,7 +198,7 @@ function initAbilities() {
         return { amount: total, mult: mult };
     };
 
-    // 4. PARCHEAR EXECUTE MOVE
+    // 5. PARCHEAR EXECUTE MOVE
     const originalExecuteMoveAbil = window.executeMove;
     window.executeMove = async function(attacker, defender, move, isPlayer) {
         if(!attacker || !defender) return;
@@ -205,12 +218,7 @@ function initAbilities() {
         if (atkData.drain) {
             const drainAmt = Math.floor(attacker.maxHp * 0.1);
             attacker.hp = Math.min(attacker.maxHp, attacker.hp + drainAmt);
-            // Render manual
-            if(window.renderBoxManual) {
-                 window.renderBoxManual(attacker, isPlayer ? 'player-box' : 'opponent-box', isPlayer, isPlayer?state.team[state.activeIdx]?.name:'Rival'); 
-            } else if (window.renderAll) {
-                 window.renderAll(); 
-            }
+            if(window.renderAll) window.renderAll(); 
         }
 
         // Contacto
@@ -224,7 +232,7 @@ function initAbilities() {
         if (defender.hp <= 0 && atkData.onKill) atkData.onKill(attacker);
     };
 
-    // 5. STATUS DAMAGE
+    // 6. STATUS DAMAGE
     const originalRunStatusDamageAbil = window.runStatusDamage;
     window.runStatusDamage = async function(mon, isPlayer) {
         if (!mon || mon.hp <= 0) return;

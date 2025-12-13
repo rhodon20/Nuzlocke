@@ -1,6 +1,6 @@
 /* =========================================================
-   INFO ADDON - STATS & ABILITY VIEWER
-   Description: Muestra stats detallados y explicación de habilidades.
+   INFO ADDON - STATS & ABILITY VIEWER (Advanced Table Layout)
+   Description: Muestra stats detallados en 4 columnas.
 ========================================================= */
 
 (function() {
@@ -23,29 +23,46 @@
         }
         #info-content {
             background: #111938; border: 2px solid #00c6d7;
-            width: 90%; max-width: 400px; max-height: 80vh;
+            width: 95%; max-width: 500px; max-height: 90vh;
             border-radius: 12px; padding: 15px;
             overflow-y: auto; color: #e8ecff;
             box-shadow: 0 0 20px rgba(0,198,215,0.3);
             position: relative;
         }
         .info-header {
-            text-align: center; margin-bottom: 15px;
-            border-bottom: 1px solid #333; padding-bottom: 10px;
+            text-align: center; margin-bottom: 10px;
+            border-bottom: 1px solid #333; padding-bottom: 5px;
         }
         .info-section {
             background: rgba(0,0,0,0.3); padding: 10px;
-            border-radius: 8px; margin-bottom: 10px;
+            border-radius: 8px; margin-bottom: 15px;
         }
-        .info-section h4 { margin: 0 0 5px 0; color: #ffd54a; font-size: 0.9rem; }
-        .stat-row {
-            display: flex; justify-content: space-between; font-size: 0.8rem;
-            padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,0.05);
+        .info-section h4 { margin: 0 0 5px 0; color: #ffd54a; font-size: 1rem; }
+        
+        /* GRID SYSTEM */
+        .stat-grid {
+            display: grid;
+            grid-template-columns: 1.2fr 1fr 1fr 1fr; /* Nombres | Base | Hab | Final */
+            gap: 5px;
+            font-size: 0.8rem;
+            margin-top: 10px;
         }
-        .stat-val { font-family: monospace; font-size: 0.9rem; }
-        .buff-pos { color: #4caf50; }
-        .buff-neg { color: #f44336; }
-        .ability-desc { font-style: italic; font-size: 0.8rem; color: #aaa; margin-top: 2px; }
+        .grid-head {
+            font-weight: bold; color: #00c6d7;
+            text-align: center; border-bottom: 1px solid #444;
+            padding-bottom: 4px; margin-bottom: 4px;
+        }
+        .stat-name { text-align: left; font-weight: bold; color: #ccc; padding-left: 5px; }
+        .stat-num { text-align: center; font-family: monospace; font-size: 0.95rem; }
+        
+        /* COLORS */
+        .val-plus { color: #4caf50; }
+        .val-minus { color: #f44336; }
+        .val-neutral { color: #555; }
+        .final-stage-pos { color: #81c784; font-weight:bold; }
+        .final-stage-neg { color: #e57373; font-weight:bold; }
+        
+        .ability-desc { font-style: italic; font-size: 0.8rem; color: #aaa; margin-top: 2px; margin-bottom: 8px; }
         .close-info {
             position: absolute; top: 10px; right: 10px;
             background: transparent; border: none; color: #ff6b6b;
@@ -54,7 +71,7 @@
     `;
     document.head.appendChild(style);
 
-    // 2. INYECTAR BOTÓN EN LA UI
+    // 2. INYECTAR BOTÓN
     window.addEventListener('load', () => {
         const teamBar = document.getElementById('team-bar');
         if (teamBar) {
@@ -67,7 +84,7 @@
         createInfoModal();
     });
 
-    // 3. LOGICA DE LA VENTANA
+    // 3. LOGICA MODAL
     let isInfoOpen = false;
 
     function createInfoModal() {
@@ -76,7 +93,7 @@
         div.innerHTML = `
             <div id="info-content">
                 <button class="close-info" onclick="toggleInfoModal()">×</button>
-                <h2 class="info-header">Datos de Combate</h2>
+                <h2 class="info-header">Análisis de Combate</h2>
                 <div id="info-dynamic-data"></div>
             </div>
         `;
@@ -94,22 +111,18 @@
     function updateInfoData() {
         if (!isInfoOpen) return;
         
-        // Obtener referencias seguras (Funciona en Single y PvP)
         let pMon, oMon;
-        
-        // Detección de modo (PvP o Normal)
+        // Detección de entorno (PvP o Normal)
         if (typeof pvpState !== 'undefined' && pvpState.active) {
             const phase = pvpState.turnPhase;
-            // En PvP mostramos según perspectiva del turno
-            if (phase === 0 || phase === 2) { // Turno P1 o Ejecución
+            if (phase === 0 || phase === 2) { 
                 pMon = pvpState.p1.team[pvpState.p1.activeIdx];
                 oMon = pvpState.p2.team[pvpState.p2.activeIdx];
-            } else { // Turno P2
+            } else { 
                 pMon = pvpState.p2.team[pvpState.p2.activeIdx];
                 oMon = pvpState.p1.team[pvpState.p1.activeIdx];
             }
         } else {
-            // Modo Normal/Nuzlocke
             if (!state || !state.team || !opponent) return;
             pMon = state.team[state.activeIdx];
             oMon = opponent;
@@ -119,75 +132,111 @@
 
         const container = document.getElementById('info-dynamic-data');
         container.innerHTML = `
-            ${renderMonInfo(oMon, "Rival")}
-            <div style="text-align:center; font-size:1.5rem; margin:5px 0;">🆚</div>
-            ${renderMonInfo(pMon, "Tu Pokémon")}
+            ${renderMonTable(oMon, "Rival")}
+            <div style="text-align:center; font-size:1.2rem; margin:10px 0; opacity:0.5;">⚔️ VS ⚔️</div>
+            ${renderMonTable(pMon, "Tu Pokémon")}
         `;
     }
 
-    function renderMonInfo(mon, title) {
-        // Datos de Habilidad
+    function renderMonTable(mon, title) {
         const abilName = mon.ability || "Ninguna";
         let abilDesc = "Sin efecto.";
         if (typeof ABILITIES_DATA !== 'undefined' && mon.ability && ABILITIES_DATA[mon.ability]) {
             abilDesc = ABILITIES_DATA[mon.ability].desc;
         }
 
-        // Datos de Stats (Calculando modificadores)
         const stats = [
-            { id: 'atk', name: 'Ataque' },
-            { id: 'def', name: 'Defensa' },
-            { id: 'spa', name: 'At. Esp' },
-            { id: 'spd', name: 'Def. Esp' },
-            { id: 'spe', name: 'Velocid' }
+            { id: 'atk', label: 'Ataque' },
+            { id: 'def', label: 'Defensa' },
+            { id: 'spa', label: 'At. Esp' },
+            { id: 'spd', label: 'Def. Esp' },
+            { id: 'spe', label: 'Velocid' }
         ];
 
-        const statsHTML = stats.map(s => {
+        let rowsHTML = '';
+
+        stats.forEach(s => {
+            // 1. Valor Base (Raw Stat del nivel actual)
+            const baseVal = mon[s.id]; 
+
+            // 2. Valor Final (Calculado por abilities.js -> getStat, incluye Todo)
+            const finalVal = mon.getStat(s.id);
+
+            // 3. Calcular influencia de Etapas (Swords Dance, etc)
             const stage = mon.stages[s.id] || 0;
-            const currentVal = mon.getStat(s.id); // Valor final calculado
+            let stageMult = 1;
+            if (stage >= 0) stageMult = (2 + stage) / 2;
+            else stageMult = 2 / (2 + Math.abs(stage));
+
+            // Calculamos cuánto sería el stat SIN habilidad pero CON etapas
+            // Nota: getStat original aplica Stages. Parálisis aplica 0.5 a velocidad en originalGetStat.
+            let standardVal = Math.floor(baseVal * stageMult);
             
-            let stageStr = "";
-            let classStr = "";
-            
-            if (stage > 0) {
-                stageStr = `(+${stage})`;
-                classStr = "buff-pos";
-            } else if (stage < 0) {
-                stageStr = `(${stage})`;
-                classStr = "buff-neg";
+            // Corrección manual de Parálisis para aislar la habilidad correctamente
+            if (s.id === 'spe' && mon.status === 'PAR') {
+                standardVal = Math.floor(standardVal * 0.5);
             }
 
-            return `
-                <div class="stat-row">
-                    <span>${s.name}</span>
-                    <span class="stat-val ${classStr}">${currentVal} ${stageStr}</span>
-                </div>
+            // 4. Valor Añadido por Habilidad (Diferencia)
+            const abilityDiff = finalVal - standardVal;
+
+            // Formateo Visual
+            let diffStr = "-";
+            let diffClass = "val-neutral";
+            if (abilityDiff > 0) {
+                diffStr = `+${abilityDiff}`;
+                diffClass = "val-plus";
+            } else if (abilityDiff < 0) {
+                diffStr = `${abilityDiff}`;
+                diffClass = "val-minus";
+            }
+
+            // Indicador de Etapa en el valor final
+            let stageIndicator = "";
+            let finalClass = "";
+            if (stage > 0) {
+                stageIndicator = `<sup style="color:#81c784">^+${stage}</sup>`;
+                finalClass = "final-stage-pos";
+            } else if (stage < 0) {
+                stageIndicator = `<sup style="color:#e57373">^${stage}</sup>`;
+                finalClass = "final-stage-neg";
+            }
+
+            rowsHTML += `
+                <div class="stat-name">${s.label}</div>
+                <div class="stat-num" style="color:#aaa;">${baseVal}</div>
+                <div class="stat-num ${diffClass}">${diffStr}</div>
+                <div class="stat-num ${finalClass}">${finalVal}${stageIndicator}</div>
             `;
-        }).join('');
+        });
 
         return `
             <div class="info-section">
-                <h4>${title}: ${mon.name} (Nv ${mon.level})</h4>
-                <div style="margin-bottom:8px;">
-                    <div style="font-weight:bold; color:#00c6d7;">Hb: ${abilName}</div>
+                <h4>${title}: ${mon.name} <span style="font-size:0.8em; color:#999;">(Nv ${mon.level})</span></h4>
+                <div>
+                    <span style="color:#00c6d7; font-weight:bold;">Hb: ${abilName}</span>
                     <div class="ability-desc">${abilDesc}</div>
                 </div>
-                <div style="background:rgba(0,0,0,0.2); padding:5px; border-radius:4px;">
-                    ${statsHTML}
+                
+                <div class="stat-grid">
+                    <div class="grid-head" style="text-align:left; padding-left:5px;">Stat</div>
+                    <div class="grid-head">Base</div>
+                    <div class="grid-head">Hab</div>
+                    <div class="grid-head">Final</div>
+                    
+                    ${rowsHTML}
                 </div>
             </div>
         `;
     }
 
-    // 5. MONKEY PATCH - ENGANCHARSE AL RENDER
-    // Esto asegura que si la ventana está abierta y cambia algo, se actualiza sola.
+    // 5. AUTO-UPDATE
     const originalRenderAllInfo = window.renderAll;
     window.renderAll = function() {
-        if (originalRenderAllInfo) originalRenderAllInfo(); // Llamar original
-        if (isInfoOpen) updateInfoData(); // Actualizar ventana si está abierta
+        if (originalRenderAllInfo) originalRenderAllInfo();
+        if (isInfoOpen) updateInfoData();
     };
     
-    // Enganche extra para modo PvP manual (si usas pvp_addon.js)
     const originalRenderPvPInfo = window.renderPvP;
     if (originalRenderPvPInfo) {
         window.renderPvP = function() {
