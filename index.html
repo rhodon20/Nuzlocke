@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
   <title>Pokemon Rogue - Kanto Edition</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
   <style>
     :root{
       --ui-bg: #0b1020;
@@ -76,23 +77,12 @@
       transition: background 0.5s ease;
     }
 
-    /* Fondos Dinámicos */
     .bg-forest { background: linear-gradient(180deg, #81c784 0%, #2e7d32 30%, #1b5e20 100%); }
     .bg-cave { background: linear-gradient(180deg, #795548 0%, #3e2723 40%, #1a100e 100%); }
     .bg-ocean { background: linear-gradient(180deg, #4fc3f7 0%, #0288d1 40%, #01579b 100%); }
     .bg-night { background: linear-gradient(180deg, #303f9f 0%, #1a237e 40%, #000000 100%); }
     .bg-volcano { background: linear-gradient(180deg, #ff8a65 0%, #d84315 40%, #3e2723 100%); }
     
-    @keyframes screen-shake {
-      0% { transform: translate(0, 0); }
-      20% { transform: translate(-4px, 4px); }
-      40% { transform: translate(4px, -4px); }
-      60% { transform: translate(-4px, -4px); }
-      80% { transform: translate(4px, 4px); }
-      100% { transform: translate(0, 0); }
-    }
-    .shake-screen { animation: screen-shake 0.4s ease-out; }
-
     /* ZONAS DE COMBATE */
     .combatant-zone {
       position: absolute;
@@ -138,6 +128,8 @@
       justify-content: center;
       position: relative;
       z-index: 5;
+      /* Eliminada la animación idle CSS para dejar control a AnimeJS si se desea, 
+         o mantenemos una flotación CSS suave simple */
     }
 
     .sprite-img {
@@ -147,38 +139,14 @@
       height: auto;
       image-rendering: pixelated;
       filter: drop-shadow(0 4px 4px rgba(0,0,0,0.4));
-      transition: filter 0.2s;
+      transform-origin: bottom center;
     }
 
-    @keyframes idle-anim {
+    @keyframes idle-float {
       0%, 100% { transform: translateY(0); }
       50% { transform: translateY(-4px); }
     }
-    .anim-idle .sprite-img { animation: idle-anim 2.5s infinite ease-in-out; }
-
-    @keyframes attack-push-right {
-      0% { transform: translateX(0); }
-      30% { transform: translateX(-10px) rotate(-5deg); }
-      50% { transform: translateX(40px); }
-      100% { transform: translateX(0); }
-    }
-    @keyframes attack-push-left {
-      0% { transform: translateX(0); }
-      30% { transform: translateX(10px) rotate(5deg); }
-      50% { transform: translateX(-40px); }
-      100% { transform: translateX(0); }
-    }
-    .anim-attack-player .sprite-img { animation: attack-push-right 0.3s ease-in-out; }
-    .anim-attack-opponent .sprite-img { animation: attack-push-left 0.3s ease-in-out; }
-
-    @keyframes damage-blink {
-      0%, 100% { opacity: 1; filter: brightness(1) sepia(0) saturate(1); }
-      20% { opacity: 0.2; filter: brightness(10) sepia(1) hue-rotate(-50deg); }
-      40% { opacity: 1; filter: brightness(1); }
-      60% { opacity: 0.2; filter: brightness(10) sepia(1) hue-rotate(-50deg); }
-      80% { opacity: 1; filter: brightness(1); }
-    }
-    .anim-damage .sprite-img { animation: damage-blink 0.6s linear; }
+    .anim-idle .sprite-img { animation: idle-float 2.5s infinite ease-in-out; }
 
     /* UI Stats Boxes */
     .stats-box {
@@ -213,7 +181,7 @@
       height: 100%;
       background: var(--ui-ok);
       width: 100%;
-      transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1), background 0.3s;
+      /* Eliminada transition CSS para usar AnimeJS */
     }
     .hp-text { font-size: 0.7rem; text-align: right; margin-top: 1px; font-weight: bold; text-shadow: 0 1px 1px black; }
     
@@ -257,7 +225,7 @@
       background-size: contain;
       background-repeat: no-repeat;
       background-position: center;
-      transition: top 0.4s linear, left 0.4s linear;
+      opacity: 0; /* Start hidden for animejs fade in */
     }
     .proj-fire { background: radial-gradient(circle, #ffeb3b 20%, #f44336 70%); border-radius: 50%; box-shadow: 0 0 10px orange; }
     .proj-water { background: radial-gradient(circle at 30% 30%, #fff, #2196f3); border-radius: 50% 50% 50% 0; transform: rotate(-45deg); box-shadow: 0 0 10px #03a9f4; }
@@ -272,11 +240,7 @@
       pointer-events: none;
       font-size: 20px;
       z-index: 26;
-      animation: impact-explode 0.6s ease-out forwards;
-    }
-    @keyframes impact-explode {
-      0% { transform: translate(-50%, -50%) scale(0.5); opacity: 1; }
-      100% { transform: translate(var(--tx), var(--ty)) scale(1.5) rotate(var(--rot)); opacity: 0; }
+      /* CSS Animation removed, driven by AnimeJS */
     }
 
     /* ======= Logs & Controls ======= */
@@ -337,7 +301,6 @@
     .type-Fantasma { background: #4527a0; color: #fff; }
     .type-Hielo { background: #00acc1; color: #fff; }
     .type-Dragón { background: #311b92; color: #fff; }
-    /* Nuevos en 2ª Generación */
     .type-Acero { background: #607d8b; color: #fff; }
     .type-Siniestro { background: #212121; color: #fff; }
     
@@ -536,24 +499,20 @@ class Pokemon {
     this.xp = 0;
     this.xpToNext = level * 60 + 100;
     this.isShiny = Math.random() < CONSTANTS.SHINY_CHANCE;
-    this.status = null; // 'BRN', 'PSN', 'PAR', 'SLP', 'FRZ'
+    this.status = null;
     
-    // Stats Calculator 
-    this.bonusMultiplier = 1.0; // Para el evento de la 8ª medalla
+    this.bonusMultiplier = 1.0;
     this.baseStats = {
       hp: data.hp, atk: data.atk, def: data.def, 
       spa: data.sp_atk, spd: data.sp_def, spe: data.speed
     };
     
-    // In-Battle Stat Stages (-6 to +6)
     this.stages = { atk:0, def:0, spa:0, spd:0, spe:0 };
 
     this.recalcStats();
     this.hp = this.maxHp;
 
-    // Move Logic based on Mode
     if (isNuzlocke) {
-      // Random moves from global pool
       const allMoves = Object.keys(MOVES);
       this.moves = [];
       const numMoves = Math.min(4, Math.max(1, Math.floor(level / 5)));
@@ -569,9 +528,7 @@ class Pokemon {
 
   recalcStats() {
     const mult = this.bonusMultiplier;
-    // HP Formula Simplificada
     this.maxHp = Math.floor(0.01 * (2 * this.baseStats.hp * mult) * this.level) + this.level + 10;
-    // Base Stats Logic
     this.atk = Math.floor(0.01 * (2 * this.baseStats.atk * mult) * this.level) + 5;
     this.def = Math.floor(0.01 * (2 * this.baseStats.def * mult) * this.level) + 5;
     this.spa = Math.floor(0.01 * (2 * this.baseStats.spa * mult) * this.level) + 5;
@@ -579,21 +536,14 @@ class Pokemon {
     this.spe = Math.floor(0.01 * (2 * this.baseStats.spe * mult) * this.level) + 5;
   }
 
-  // Get Stat with Stages and Status modifiers (In-Battle)
   getStat(statName) {
-    let base = this[statName]; // this.atk, this.spe, etc.
+    let base = this[statName]; 
     let stage = this.stages[statName] || 0;
-    
-    // Stage Multiplier
     let multiplier = 1.0;
     if (stage >= 0) multiplier = (2 + stage) / 2;
     else multiplier = 2 / (2 + Math.abs(stage));
-    
     let finalVal = Math.floor(base * multiplier);
-
-    // Status Modifiers
-    if (statName === 'spe' && this.status === 'PAR') finalVal = Math.floor(finalVal * 0.5); // Paralysis cuts speed
-
+    if (statName === 'spe' && this.status === 'PAR') finalVal = Math.floor(finalVal * 0.5);
     return Math.max(1, finalVal);
   }
 
@@ -603,7 +553,7 @@ class Pokemon {
 }
 
 /* =========================================================
-   HELPERS & VFX
+   HELPERS & VFX (ANIME.JS)
 ========================================================= */
 const $ = id => document.getElementById(id);
 const wait = ms => new Promise(r => setTimeout(r, ms));
@@ -612,7 +562,9 @@ function log(msg) {
   const div = document.createElement('div');
   div.innerHTML = msg;
   div.style.marginBottom = '4px';
+  div.style.opacity = 0; // Anime in
   $('combat-log').prepend(div);
+  anime({ targets: div, opacity: 1, translateX: [-10, 0], duration: 400 });
   if ($('combat-log').children.length > 20) $('combat-log').lastChild.remove();
 }
 
@@ -634,11 +586,11 @@ function getProjectileClass(type) {
   return map[type] || 'proj-normal';
 }
 
-async function shootProjectile(type, fromId, toId) {
+function shootProjectile(type, fromId, toId) {
   const fromEl = $(fromId);
   const toEl = $(toId);
   const layer = $('vfx-layer');
-  if (!fromEl || !toEl) return;
+  if (!fromEl || !toEl) return Promise.resolve();
 
   const r1 = fromEl.getBoundingClientRect();
   const r2 = toEl.getBoundingClientRect();
@@ -651,17 +603,22 @@ async function shootProjectile(type, fromId, toId) {
 
   const p = document.createElement('div');
   p.className = `projectile ${getProjectileClass(type)}`;
+  // Set initial position centered
   p.style.left = (startX - 16) + 'px';
   p.style.top = (startY - 16) + 'px';
-  
   layer.appendChild(p);
-  p.getBoundingClientRect(); 
-  
-  p.style.left = (endX - 16) + 'px';
-  p.style.top = (endY - 16) + 'px';
-  
-  await wait(400); 
-  p.remove();
+
+  return anime({
+    targets: p,
+    left: (endX - 16) + 'px',
+    top: (endY - 16) + 'px',
+    opacity: [0, 1, 1],
+    rotate: '1turn',
+    scale: [0.5, 1.2, 1],
+    easing: 'easeInQuad',
+    duration: 400,
+    complete: () => p.remove()
+  }).finished;
 }
 
 function spawnParticles(type, targetEl) {
@@ -671,65 +628,110 @@ function spawnParticles(type, targetEl) {
   const centerY = rect.top - parent.top + rect.height / 2;
   const icon = getEffectIcon(type);
 
-  for(let i=0; i<6; i++) {
+  for(let i=0; i<8; i++) { // More particles
     const p = document.createElement('div');
     p.classList.add('vfx-particle');
     p.textContent = icon;
     p.style.left = centerX + 'px';
     p.style.top = centerY + 'px';
-    
-    const angle = Math.random() * 360;
-    const dist = 30 + Math.random() * 40;
-    const tx = Math.cos(angle * Math.PI / 180) * dist + 'px';
-    const ty = Math.sin(angle * Math.PI / 180) * dist + 'px';
-    const rot = (Math.random() * 360) + 'deg';
-    
-    p.style.setProperty('--tx', tx);
-    p.style.setProperty('--ty', ty);
-    p.style.setProperty('--rot', rot);
-
     $('vfx-layer').appendChild(p);
-    setTimeout(() => p.remove(), 600);
+
+    anime({
+      targets: p,
+      translateX: () => anime.random(-60, 60),
+      translateY: () => anime.random(-60, 60),
+      scale: [0, 1.5, 0], // Grow then shrink
+      rotate: () => anime.random(-360, 360),
+      opacity: [1, 0],
+      duration: () => anime.random(600, 1000),
+      easing: 'easeOutExpo',
+      complete: () => p.remove()
+    });
   }
 }
 
-async function animateAttack(attackerSlotId, type) {
+function animateAttack(attackerSlotId, type) {
   const el = $(attackerSlotId);
-  const isPlayer = attackerSlotId.includes('player');
-  const animClass = isPlayer ? 'anim-attack-player' : 'anim-attack-opponent';
+  const img = el.querySelector('img');
+  if(!img) return Promise.resolve();
   
+  // Player moves right (positive), Opponent moves left (negative)
+  const dir = attackerSlotId.includes('player') ? 1 : -1;
+  
+  // Remove idle anim during attack
   el.classList.remove('anim-idle');
-  el.classList.add(animClass);
-  await wait(300);
-  el.classList.remove(animClass);
-  el.classList.add('anim-idle');
+
+  return anime.timeline({
+    targets: img,
+    easing: 'easeOutQuad'
+  })
+  .add({
+    translateX: -10 * dir, // Anticipation
+    scaleX: 0.9, 
+    scaleY: 1.1,
+    duration: 150
+  })
+  .add({
+    translateX: 50 * dir, // Lunge
+    scaleX: 1.2, 
+    scaleY: 0.8,
+    duration: 100
+  })
+  .add({
+    translateX: 0, // Return
+    scaleX: 1,
+    scaleY: 1,
+    duration: 400,
+    easing: 'easeOutElastic(1, .5)'
+  })
+  .finished.then(() => el.classList.add('anim-idle'));
 }
 
-async function animateDamage(victimSlotId) {
+function animateDamage(victimSlotId) {
   const el = $(victimSlotId);
-  el.classList.add('anim-damage');
-  $('battle-scene').classList.add('shake-screen');
-  await wait(500);
-  el.classList.remove('anim-damage');
-  $('battle-scene').classList.remove('shake-screen');
+  const img = el.querySelector('img');
+  if(!img) return Promise.resolve();
+
+  // Shake container
+  const shake = anime({
+    targets: el,
+    translateX: [
+      { value: -5, duration: 50 },
+      { value: 5, duration: 50 },
+      { value: -5, duration: 50 },
+      { value: 5, duration: 50 },
+      { value: 0, duration: 50 }
+    ],
+    easing: 'linear'
+  });
+
+  // Flash Effect
+  const flash = anime({
+    targets: img,
+    filter: [
+      { value: 'brightness(3) sepia(1) hue-rotate(-50deg)', duration: 100 },
+      { value: 'brightness(1) sepia(0) hue-rotate(0deg)', duration: 200 }
+    ],
+    opacity: [1, 0.4, 1],
+    easing: 'linear'
+  });
+
+  return Promise.all([shake.finished, flash.finished]);
 }
 
-// 1. Añade esta función auxiliar para calcular el Tier según el Nivel
 function getTierFromLevel(level) {
   if (level <= 15) return 1;
   if (level <= 30) return 2;
   if (level <= 45) return 3;
   if (level <= 60) return 4;
-  return 5; // Nivel 61 en adelante
+  return 5;
 }
 
 /* =========================================================
    CORE LOGIC
 ========================================================= */
 function initGame() {
-  // --- AÑADE ESTA LÍNEA AQUÍ ---
   if(typeof initAbilities === 'function') initAbilities();
-  
   $('btn-load').disabled = !localStorage.getItem('poke_save');
 }
 
@@ -741,10 +743,9 @@ function startGame(mode) {
   state.inventory.pots = CONSTANTS.START_POTS;
   state.activeIdx = 0;
   
-  // Starter Logic
   let keys;
   if (mode === 'nuzlocke') {
-    keys = Object.keys(POKEMON_SPECIES); // Any pokemon
+    keys = Object.keys(POKEMON_SPECIES);
   } else {
     keys = Object.keys(POKEMON_SPECIES).filter(k => POKEMON_SPECIES[k].tier === 1); 
     if (keys.length === 0) keys = Object.keys(POKEMON_SPECIES);
@@ -757,9 +758,8 @@ function startGame(mode) {
   $('game-title').classList.add('hidden-title');
   $('mode-display').innerText = mode === 'nuzlocke' ? '☠️ Nuzlocke' : 'Normal';
   
-  $('combat-log').innerHTML = mode === 'nuzlocke' 
-    ? "💀 Modo Nuzlocke iniciado. ¡Si mueren, no vuelven!" 
-    : "Bienvenido a Kanto Rogue."; 
+  $('combat-log').innerHTML = '';
+  log(mode === 'nuzlocke' ? "💀 Modo Nuzlocke iniciado." : "Bienvenido a Kanto Rogue.");
   
   closeSwitchMenu(); 
   turnLock = false; 
@@ -772,48 +772,35 @@ function getTeamAverageLevel() {
   return Math.floor(total / state.team.length);
 }
 
-// 2. Sustituye el inicio de tu función startBattle por este bloque:
 function startBattle() {
-  // Clear temporary states
   state.team.forEach(p => {
       p.resetStages();
       if(p.hp > 0) p.status = null;
   });
 
-  // Background logic (sin cambios)
   const bgs = ['bg-forest', 'bg-cave', 'bg-ocean', 'bg-night', 'bg-volcano'];
   const newBg = bgs[Math.floor(Math.random() * bgs.length)];
   $('battle-scene').className = newBg;
 
-  // --- NUEVA LÓGICA DE GENERACIÓN DE OPONENTE ---
   const avgLevel = getTeamAverageLevel();
   let targetLevel;
   
-  // Cálculo de nivel del rival (ligeramente ajustado para variedad)
   if (avgLevel < 15) targetLevel = Math.max(2, avgLevel - 2 + Math.floor(Math.random() * 4)); 
   else if (avgLevel < 30) targetLevel = avgLevel + Math.floor(Math.random() * 3); 
   else targetLevel = avgLevel + Math.floor(Math.random() * 5);
 
-  // Determinar el Tier máximo permitido para este nivel
   const currentTier = getTierFromLevel(targetLevel);
 
-  // Filtramos: Solo aparecen Pokémon cuyo spawnTier sea menor o igual al Tier actual.
-  // Esto evita que salga un Legendario (Tier 5) si estás en nivel 5 (Tier 1),
-  // pero permite que salga un Rattata (Tier 1) aunque estés en nivel 50.
   let validKeys = Object.keys(POKEMON_SPECIES).filter(key => {
     const pData = POKEMON_SPECIES[key];
-    // Si no tiene spawnTier definido, asumimos 1 por seguridad
     const pTier = pData.spawnTier || 1; 
     return pTier <= currentTier;
   });
 
-  // Fallback por si el filtro vacía la lista (no debería pasar si configuras bien el JS)
   if (validKeys.length === 0) validKeys = Object.keys(POKEMON_SPECIES);
 
   const pIdx = Math.floor(Math.random() * validKeys.length);
   opponent = new Pokemon(validKeys[pIdx], targetLevel, state.gameMode === 'nuzlocke');
-  
-  // ... resto de la función startBattle (logs, renderAll, etc.) ...
   
   const shinyText = opponent.isShiny ? '✨ ' : '';
   log(`⚠️ ¡Un ${shinyText}<b>${opponent.name}</b> Nvl ${opponent.level} (Tier ${currentTier}) salvaje apareció!`);
@@ -824,7 +811,6 @@ function startBattle() {
 
 function renderAll() {
   const player = state.team[state.activeIdx];
-  // Safe check if activeIdx is -1 or out of bounds (Nuzlocke death handling)
   if(!player && state.team.length > 0 && state.activeIdx >= 0) {
     state.activeIdx = 0;
   }
@@ -832,41 +818,15 @@ function renderAll() {
   
   if(!currentP) return;
 
-const renderBox = (mon, id, isPlayer) => {
-    const hpPct = (mon.hp / mon.maxHp) * 100;
-    const color = hpPct > 50 ? '#4caf50' : hpPct > 20 ? '#ffeb3b' : '#f44336';
-    const container = $(id);
-    const shinyMark = mon.isShiny ? '<span style="color:gold; text-shadow:0 0 5px orange">✨</span> ' : '';
-
-    // --- Muestra la habilidad tanto en el jugador como en el rival ---
-    const abilityHTML = mon.ability ? `<div style="font-size:0.7rem; color:#ffd54a; font-weight:bold; margin-top:-2px; margin-bottom:2px;">Hb: ${mon.ability}</div>` : '';
-
-    let xpHTML = '';
-    if (isPlayer) {
-      const xpPct = (mon.xp / mon.xpToNext) * 100;
-      xpHTML = `<div class="xp-container"><div class="xp-fill" style="width:${xpPct}%"></div></div>`;
-    }
-
-    const statusHTML = mon.status ? `<span class="status-tag status-${mon.status}">${mon.status}</span>` : '';
-
-    container.innerHTML = `
-      <div class="poke-name"><span>${shinyMark}${mon.name}</span> <span class="poke-lvl">Nv${mon.level}</span></div>
-      ${abilityHTML}
-      <div class="hp-container">
-        <div class="hp-fill" style="width:${hpPct}%; background:${color}"></div>
-      </div>
-      ${xpHTML}
-      <div class="hp-text">${statusHTML}${mon.hp}/${mon.maxHp}</div>
-    `;
-  };
-
+  // Render stats boxes with update logic for AnimeJS
   renderBox(currentP, 'player-box', true);
   renderBox(opponent, 'opponent-box', false);
 
   const fetchSprite = async (mon, slot, back) => {
     const slug = SLUG_MAP[mon.name] || mon.name.toLowerCase();
     const uniqueId = `${mon.name}-${mon.isShiny ? 'shiny' : 'norm'}-${back?'back':'front'}`;
-    const currentImg = $(slot).querySelector('img');
+    const slotEl = $(slot);
+    const currentImg = slotEl.querySelector('img');
 
     if(currentImg && currentImg.dataset.uid === uniqueId) return;
 
@@ -883,9 +843,19 @@ const renderBox = (mon, id, isPlayer) => {
       }
       if (!src) src = back ? data.sprites.back_default : data.sprites.front_default;
 
-      $(slot).innerHTML = `<img src="${src}" class="sprite-img" data-uid="${uniqueId}">`;
+      slotEl.innerHTML = `<img src="${src}" class="sprite-img" data-uid="${uniqueId}">`;
+      
+      // Entrance Animation
+      anime({
+        targets: slotEl.querySelector('img'),
+        scale: [0, 1],
+        opacity: [0, 1],
+        easing: 'easeOutElastic(1, .8)',
+        duration: 800
+      });
+
     } catch(e) {
-      $(slot).innerHTML = `<div style="font-size:3rem;">?</div>`;
+      slotEl.innerHTML = `<div style="font-size:3rem;">?</div>`;
     }
   };
 
@@ -913,18 +883,74 @@ const renderBox = (mon, id, isPlayer) => {
   $('btn-switch').disabled = turnLock || state.team.filter(p=>p.hp>0).length <= 1;
 }
 
+// UPDATE LOGIC FOR RENDER BOX TO ALLOW ANIME.JS TWEENING
+function renderBox(mon, id, isPlayer) {
+    const container = $(id);
+    const hpPct = (mon.hp / mon.maxHp) * 100;
+    const color = hpPct > 50 ? '#4caf50' : hpPct > 20 ? '#ffeb3b' : '#f44336';
+    const shinyMark = mon.isShiny ? '<span style="color:gold; text-shadow:0 0 5px orange">✨</span> ' : '';
+    const abilityHTML = mon.ability ? `<div style="font-size:0.7rem; color:#ffd54a; font-weight:bold; margin-top:-2px; margin-bottom:2px;">Hb: ${mon.ability}</div>` : '';
+    const statusHTML = mon.status ? `<span class="status-tag status-${mon.status}">${mon.status}</span>` : '';
+
+    // Check if we need to rebuild the entire HTML (new pokemon)
+    // We use a data attribute to track current pokemon name
+    const currentMonName = container.dataset.monName;
+    
+    if (currentMonName !== mon.name) {
+        // Build Structure
+        let xpHTML = '';
+        if (isPlayer) {
+          const xpPct = (mon.xp / mon.xpToNext) * 100;
+          xpHTML = `<div class="xp-container"><div class="xp-fill" style="width:${xpPct}%"></div></div>`;
+        }
+
+        container.innerHTML = `
+          <div class="poke-name"><span>${shinyMark}${mon.name}</span> <span class="poke-lvl">Nv${mon.level}</span></div>
+          ${abilityHTML}
+          <div class="hp-container">
+            <div class="hp-fill" style="width:${hpPct}%; background-color:${color}"></div>
+          </div>
+          ${xpHTML}
+          <div class="hp-text">${statusHTML}${mon.hp}/${mon.maxHp}</div>
+        `;
+        container.dataset.monName = mon.name;
+    } else {
+        // Just update specific parts to allow animation
+        container.querySelector('.poke-lvl').innerText = `Nv${mon.level}`;
+        const hpText = container.querySelector('.hp-text');
+        
+        // Animate HP Bar
+        anime({
+            targets: `#${id} .hp-fill`,
+            width: `${hpPct}%`,
+            backgroundColor: color,
+            easing: 'easeOutElastic(1, .8)',
+            duration: 800
+        });
+
+        // Update Text (Simple replace, rolling numbers is complex with text mix)
+        hpText.innerHTML = `${statusHTML}${mon.hp}/${mon.maxHp}`;
+        
+        // Update XP if player
+        if(isPlayer) {
+            const xpPct = (mon.xp / mon.xpToNext) * 100;
+            const xpFill = container.querySelector('.xp-fill');
+            if(xpFill) xpFill.style.width = `${xpPct}%`;
+        }
+    }
+}
+
 /* =========================================================
    BATTLE LOGIC
 ========================================================= */
 async function executeMove(attacker, defender, move, isPlayer) {
-  if(attacker.hp <= 0) return; // Dead check
+  if(attacker.hp <= 0) return; 
 
   const atkSlot = isPlayer ? 'player-sprite-slot' : 'opponent-sprite-slot';
   const defSlot = isPlayer ? 'opponent-sprite-slot' : 'player-sprite-slot';
   const atkZone = isPlayer ? 'zone-player' : 'zone-opponent';
   const defZone = isPlayer ? 'zone-opponent' : 'zone-player';
 
-  // Status Check (Start of Move)
   if (attacker.status === 'FRZ') {
     if(Math.random() < 0.2) {
       attacker.status = null;
@@ -954,9 +980,8 @@ async function executeMove(attacker, defender, move, isPlayer) {
   }
 
   log(`${isPlayer ? '👊' : '🔻'} ${attacker.name} usa <b>${move.nombre}</b>!`);
-  await animateAttack(atkSlot, move.tipo);
+  await animateAttack(atkSlot, isPlayer);
   
-  // Non-damaging moves (Status only) handling could go here, but for now we assume all have Power except 0
   if (move.poder > 0 || move.nombre === 'Inversión' || move.nombre === 'Furia Dragón') {
     await shootProjectile(move.tipo, atkZone, defZone);
     const dmg = calcDamage(attacker, defender, move);
@@ -970,10 +995,10 @@ async function executeMove(attacker, defender, move, isPlayer) {
         
         await animateDamage(defSlot);
         defender.hp = Math.max(0, defender.hp - dmg.amount);
+        renderAll(); // Trigger HP bar animation
     }
   }
 
-  // Effects (Buffs/Debuffs/Status)
   if (defender.hp > 0 && move.effect) {
       if (Math.random() < (move.chance || 1.0)) {
           applyEffect(attacker, defender, move.effect);
@@ -982,25 +1007,21 @@ async function executeMove(attacker, defender, move, isPlayer) {
 }
 
 function applyEffect(attacker, defender, effect) {
-    // Stat Modifiers
     if (effect === 'SPD_DOWN') { applyStatChange(defender, 'spe', -1, 'Velocidad'); }
     else if (effect === 'DEF_DOWN') { applyStatChange(defender, 'def', -1, 'Defensa'); }
     else if (effect === 'ATK_UP') { applyStatChange(attacker, 'atk', 1, 'Ataque'); }
     else if (effect === 'DEF_UP') { applyStatChange(attacker, 'def', 1, 'Defensa'); }
-    else if (effect === 'ACC_DOWN') { log(`👁️ Precisión de ${defender.name} bajó.`); } // Simplified
+    else if (effect === 'ACC_DOWN') { log(`👁️ Precisión de ${defender.name} bajó.`); }
     else if (effect === 'ALL_UP') {
         ['atk','def','spa','spd','spe'].forEach(s => attacker.stages[s] = Math.min(6, attacker.stages[s]+1));
         log(`🌟 ¡Todas las estadísticas de ${attacker.name} subieron!`);
     }
-    // Status Conditions
     else if (!defender.status) {
-        const statuses = ['BRN', 'PSN', 'PAR', 'FRZ', 'SLP', 'CON']; // CON = confusion ignored for simplicity in DB usually
-        if (statuses.includes(effect) && effect !== 'CON' && effect !== 'FLI') {
+        const statuses = ['BRN', 'PSN', 'PAR', 'FRZ', 'SLP']; 
+        if (statuses.includes(effect)) {
             defender.status = effect;
             log(`✨ ¡${defender.name} sufrió <b>${effect}</b>!`);
-        } else if (effect === 'FLI') {
-            // Flinch logic handles in turn order, but since this is execution, FLI applies to NEXT turn if defender hasn't moved.
-            // Simplified: FLI only visual here
+            renderAll();
         }
     }
 }
@@ -1020,6 +1041,7 @@ async function runStatusDamage(mon, isPlayer) {
     const dmg = Math.floor(mon.maxHp / 8);
     mon.hp = Math.max(0, mon.hp - dmg);
     await animateDamage(isPlayer ? 'player-sprite-slot' : 'opponent-sprite-slot');
+    renderAll();
     log(`${mon.status === 'BRN' ? '🔥' : '☠️'} ${mon.name} sufre daño por ${mon.status}.`);
   }
 }
@@ -1031,14 +1053,12 @@ async function doTurn(moveKey) {
   const player = state.team[state.activeIdx];
   const playerMove = MOVES[moveKey];
   
-  // Opponent Choice
   let oppMoveKey = null;
   if(opponent.moves.length > 0) {
     oppMoveKey = opponent.moves[Math.floor(Math.random() * opponent.moves.length)];
   }
   const oppMove = oppMoveKey ? MOVES[oppMoveKey] : null;
 
-  // Determine Order based on Speed Stats
   const pSpeed = player.getStat('spe');
   const oSpeed = opponent.getStat('spe');
   
@@ -1046,7 +1066,6 @@ async function doTurn(moveKey) {
   let moveFirst, moveSecond;
   let isPlayerFirst;
 
-  // Quick Attack priority check (simplified)
   const pPrio = (playerMove.nombre === 'Ataque Rápido' || playerMove.nombre === 'Velocidad Extrema') ? 1 : 0;
   const oPrio = (oppMove && (oppMove.nombre === 'Ataque Rápido' || oppMove.nombre === 'Velocidad Extrema')) ? 1 : 0;
 
@@ -1071,25 +1090,19 @@ async function doTurn(moveKey) {
       second = player; moveSecond = playerMove;
   }
 
-  renderAll(); // Disable buttons
-
   // ACTION 1
   await executeMove(first, second, moveFirst, isPlayerFirst);
-  renderAll();
 
-  // Check Death 1
   if (second.hp <= 0) {
       await handleDeath(second, !isPlayerFirst);
       return;
   }
 
-  await wait(500);
+  await wait(300);
 
   // ACTION 2
   await executeMove(second, first, moveSecond, !isPlayerFirst);
-  renderAll();
 
-  // Check Death 2
   if (first.hp <= 0) {
       await handleDeath(first, isPlayerFirst);
       return;
@@ -1098,7 +1111,6 @@ async function doTurn(moveKey) {
   // End Turn Effects
   await runStatusDamage(player, true);
   if (player.hp > 0) await runStatusDamage(opponent, false);
-  renderAll();
 
   if (player.hp <= 0) {
       await handleDeath(player, true);
@@ -1106,12 +1118,24 @@ async function doTurn(moveKey) {
       await handleDeath(opponent, false);
   } else {
       turnLock = false;
-      renderAll();
+      renderAll(); // Ensure buttons re-enable
   }
 }
 
 async function handleDeath(mon, isPlayer) {
     log(`☠️ ¡${mon.name} se debilitó!`);
+    
+    // Animate death (fade out and scale down)
+    const slot = isPlayer ? 'player-sprite-slot' : 'opponent-sprite-slot';
+    await anime({
+        targets: `#${slot} img`,
+        scale: 0,
+        opacity: 0,
+        filter: 'grayscale(100%)',
+        duration: 800,
+        easing: 'easeInBack'
+    }).finished;
+
     if (isPlayer) {
         if (state.gameMode === 'nuzlocke') {
             log(`⚰️ Nuzlocke: ¡${mon.name} ha muerto para siempre!`);
@@ -1135,29 +1159,23 @@ function calcDamage(atkMon, defMon, move) {
   }
   if (mult === 0) return { amount: 0, mult: 0 }; 
 
-  // Determine Stats based on Category (Phys vs Special)
   let aStat, dStat;
   if (move.cat === 'Fis') {
       aStat = atkMon.getStat('atk');
       dStat = defMon.getStat('def');
-      // Burn reduces physical damage
       if (atkMon.status === 'BRN') aStat = Math.floor(aStat * 0.5);
   } else {
       aStat = atkMon.getStat('spa');
       dStat = defMon.getStat('spd');
   }
 
-  // Fixed Damage Moves
   if (move.nombre === 'Furia Dragón') return { amount: 40, mult: 1 };
-  // Reversal logic skipped for brevity, defaults to standard
 
   const base = ((2 * atkMon.level / 5 + 2) * move.poder * (aStat / dStat)) / 50 + 2;
   
-  // Critical Hit (Random 6.25%)
   let critical = 1;
   if (Math.random() < 0.0625) { critical = 1.5; log('🎯 ¡Golpe Crítico!'); }
 
-  // STAB
   let stab = atkMon.types.includes(move.tipo) ? 1.5 : 1;
 
   const total = Math.floor(base * mult * stab * critical * (Math.random() * 0.15 + 0.85)); 
@@ -1171,21 +1189,19 @@ async function handleWin() {
   log(`🏆 ¡Ganaste! ${opponent.name} debilitado.`);
   state.streak++;
 
-  // --- Badge Logic ---
   if (state.streak % 5 === 0) {
       state.badges++;
       log(`🏅 <b>¡Has conseguido una Medalla de Gimnasio!</b> (Total: ${state.badges})`);
   }
 
-  // --- Special Event: 8th Badge (Win 72) ---
   if (state.streak === 40) {
       log(`🌟 <b>¡HITO LEGENDARIO!</b> Has conseguido las 8 Medallas.`);
       const rewardMon = state.team[state.activeIdx] || state.team[0];
       if (rewardMon) {
           rewardMon.isShiny = true;
-          rewardMon.bonusMultiplier = 1.3; // 30% Boost
+          rewardMon.bonusMultiplier = 1.3; 
           rewardMon.recalcStats();
-          rewardMon.hp = rewardMon.maxHp; // Heal as prize
+          rewardMon.hp = rewardMon.maxHp; 
           log(`✨💎 ¡Tu <b>${rewardMon.name}</b> ahora es Shiny y un 30% más fuerte!`);
           await wait(2000);
       }
@@ -1195,7 +1211,6 @@ async function handleWin() {
   const baseXP = ((opponent.level * 40) + 100) * CONSTANTS.XP_MULT * teamSizeBonus; 
   const shareXP = Math.floor(baseXP / state.team.length);
   
-  // Clear Player Status on Win
   state.team.forEach(p => p.status = null);
 
   for (let i = 0; i < state.team.length; i++) {
@@ -1209,7 +1224,7 @@ async function handleWin() {
       member.xp -= member.xpToNext;
       member.level++;
       member.xpToNext = member.level * 60 + 100;
-      member.recalcStats(); // Recalc on level up
+      member.recalcStats(); 
       member.hp = Math.min(member.hp + 5, member.maxHp); 
       log(`🆙 ¡${member.name} subió al Nvl ${member.level}!`);
       await checkEvolutionAndMoves(member);
@@ -1229,14 +1244,12 @@ async function handleWin() {
 }
 
 async function checkEvolutionAndMoves(player) {
-  // Evolution Logic
   const evoData = EVOLUTIONS[player.name];
   if(evoData && evoData[player.level]) {
     const result = evoData[player.level];
     if(POKEMON_SPECIES[result]) {
       const oldName = player.name;
       player.name = result;
-      // Recalc stats for new species
       player.baseStats = {
           hp: POKEMON_SPECIES[result].hp,
           atk: POKEMON_SPECIES[result].atk,
@@ -1248,21 +1261,27 @@ async function checkEvolutionAndMoves(player) {
       player.recalcStats();
       player.hp = player.maxHp;
       log(`✨ ¡Tu ${oldName} evolucionó a <b>${player.name}</b>!`);
-      await wait(1000); 
+      
+      // Evolution FX
+      const slot = 'player-sprite-slot';
+      await anime({
+          targets: `#${slot} img`,
+          filter: ['brightness(1)','brightness(5)', 'brightness(1)'],
+          scale: [1, 1.5, 1],
+          duration: 1000,
+          easing: 'easeInOutQuad'
+      }).finished;
     }
   }
 
-  // Move Logic
   let newMove = null;
 
   if (state.gameMode === 'nuzlocke') {
-    // Learn random move every 10 levels in Nuzlocke
     if (player.level % 10 === 0) {
       const allMoves = Object.keys(MOVES);
       newMove = allMoves[Math.floor(Math.random() * allMoves.length)];
     }
   } else {
-    // Normal Mode
     if(evoData && evoData[player.level] && MOVES[evoData[player.level]]) {
       newMove = evoData[player.level];
     }
@@ -1273,7 +1292,6 @@ async function checkEvolutionAndMoves(player) {
       player.moves.push(newMove);
       log(`💡 ¡${player.name} aprendió <b>${newMove}</b>!`);
     } else {
-      // Prompt to forget
       await promptForgetMove(player, newMove);
     }
   }
@@ -1286,14 +1304,12 @@ function promptForgetMove(player, newMove) {
     const cancelBtn = $('btn-cancel-learn');
     list.innerHTML = '';
     
-    // Header
     const title = document.createElement('div');
     title.innerHTML = `<b>${player.name}</b> quiere aprender <b style="color:yellow">${newMove}</b>.`;
     title.style.marginBottom = '10px';
     title.style.textAlign = 'center';
     list.appendChild(title);
 
-    // Current Moves
     player.moves.forEach((mKey, idx) => {
       const m = MOVES[mKey];
       const div = document.createElement('div');
@@ -1315,6 +1331,15 @@ function promptForgetMove(player, newMove) {
     }
     
     overlay.style.display = 'flex';
+    
+    // Animate Modal In
+    anime({
+        targets: '#move-overlay',
+        opacity: [0, 1],
+        scale: [0.9, 1],
+        duration: 300,
+        easing: 'easeOutQuad'
+    });
   });
 }
 
@@ -1346,7 +1371,9 @@ function usePotion() {
     log(`💊 Usaste Poción. ${p.name} recuperó ${healAmount} PS.`);
     renderAll();
     
-    // Potions take a turn, so Opponent attacks freely
+    // Heal particles
+    spawnParticles('Planta', $('player-sprite-slot'));
+
     setTimeout(async () => {
       let oppMoveKey = null;
       if(opponent.moves.length > 0) {
@@ -1356,7 +1383,6 @@ function usePotion() {
 
       await executeMove(opponent, p, oppMove, false);
       
-      // Post-Turn Status Damage
       await runStatusDamage(p, true);
       if(p.hp > 0) await runStatusDamage(opponent, false);
       
@@ -1384,13 +1410,25 @@ async function attemptCapture() {
   ball.innerHTML = '🎱';
   ball.style.position = 'absolute';
   ball.style.left = '20%'; ball.style.bottom = '20%'; ball.style.fontSize = '30px';
-  ball.style.transition = 'all 0.5s ease-in';
   ball.style.zIndex = 100;
   $('battle-scene').appendChild(ball);
   
-  setTimeout(() => { ball.style.left = '70%'; ball.style.top = '20%'; }, 50);
+  await anime({
+      targets: ball,
+      left: '70%', top: '20%',
+      rotate: '2turn',
+      duration: 500,
+      easing: 'easeInQuad'
+  }).finished;
   
-  await wait(600);
+  // Shake effect on capture attempt
+  await anime({
+      targets: ball,
+      translateX: [0, -5, 5, -5, 5, 0],
+      duration: 600,
+      easing: 'linear'
+  }).finished;
+  
   ball.remove();
   
   const hpFactor = (opponent.maxHp - opponent.hp) / opponent.maxHp; 
@@ -1415,7 +1453,6 @@ async function attemptCapture() {
   } else {
     log(`💢 ¡${opponent.name} se liberó!`);
     
-    // Enemy attacks on fail capture
     let oppMoveKey = null;
     if(opponent.moves.length > 0) {
       oppMoveKey = opponent.moves[Math.floor(Math.random() * opponent.moves.length)];
@@ -1451,7 +1488,7 @@ function openPartyFullMenu(newMon) {
     div.innerHTML = `<span>${shiny}${p.name} (Nv${p.level})</span> <small>Liberar</small>`;
     div.onclick = async () => {
       log(`👋 Has liberado a ${p.name}. ¡Bienvenido ${newMon.name}!`);
-      state.team[idx] = newMon; // Replace
+      state.team[idx] = newMon; 
       overlay.style.display = 'none';
       await wait(1000);
       startBattle();
@@ -1468,6 +1505,15 @@ function openPartyFullMenu(newMon) {
   };
 
   overlay.style.display = 'flex';
+  
+  // Animation
+  anime({
+     targets: '#party-full-overlay',
+     opacity: [0, 1],
+     translateY: [20, 0],
+     duration: 300,
+     easing: 'easeOutQuad'
+  });
 }
 
 function openSwitchMenu(forced = false) {
@@ -1495,6 +1541,16 @@ function openSwitchMenu(forced = false) {
   overlay.style.display = 'flex';
   if(forced) $('switch-overlay').querySelector('button').style.display = 'none'; 
   else $('switch-overlay').querySelector('button').style.display = 'block'; 
+
+  // Stagger animation for list items
+  anime({
+     targets: '.modal-card',
+     translateX: [-20, 0],
+     opacity: [0, 1],
+     delay: anime.stagger(50),
+     duration: 300,
+     easing: 'easeOutQuad'
+  });
 }
 
 function closeSwitchMenu() {
@@ -1502,7 +1558,6 @@ function closeSwitchMenu() {
 }
 
 function doSwitch(idx, forced) {
-  // Si elegimos al mismo que ya está activo y está vivo, solo cerramos
   if(idx === state.activeIdx && state.team[idx].hp > 0) {
     closeSwitchMenu();
     return;
@@ -1515,13 +1570,12 @@ function doSwitch(idx, forced) {
   
   if(!forced) {
     turnLock = true;
-    renderAll(); // Forzamos render para que se deshabiliten los botones visualmente
+    renderAll(); 
 
     setTimeout(async () => {
       try {
         const p = state.team[state.activeIdx];
         
-        // Elección de movimiento del rival
         let oppMoveKey = null;
         if(opponent.moves && opponent.moves.length > 0) {
           oppMoveKey = opponent.moves[Math.floor(Math.random() * opponent.moves.length)];
@@ -1531,25 +1585,22 @@ function doSwitch(idx, forced) {
         log(`🔻 El rival aprovecha el cambio.`);
         await executeMove(opponent, p, oppMove, false);
         
-        // Daño de estado post-turno (quemadura/veneno) si aplica
         await runStatusDamage(p, true);
         renderAll();
 
-        // Verificamos si murió tras el golpe
         if(p.hp <= 0) {
           await handleDeath(p, true);
         } else {
-          turnLock = false; // <--- Importante: Desbloquear si sobrevive
+          turnLock = false; 
         }
       } catch (e) {
         console.error("Error durante el cambio:", e);
-        turnLock = false; // <--- SEGURIDAD: Si algo falla, desbloqueamos igual
+        turnLock = false; 
       } finally {
         renderAll();
       }
     }, 1000);
   } else {
-    // Cambio forzado (por muerte anterior), no hay turno de castigo
     turnLock = false;
     renderAll();
   }
@@ -1567,7 +1618,6 @@ function loadGame() {
   if(data) {
     try {
       const rawState = JSON.parse(data);
-      // Rehydrate Class Methods
       state = {
           ...rawState,
           team: rawState.team.map(d => {
@@ -1576,7 +1626,7 @@ function loadGame() {
               return p;
           })
       };
-      opponent = new Pokemon(opponent ? opponent.name : 'Rattata', 5); // Dummy rehydrate or restart battle
+      opponent = new Pokemon(opponent ? opponent.name : 'Rattata', 5);
 
       if (!state.gameMode) state.gameMode = 'normal';
       if (state.badges === undefined) state.badges = 0;
@@ -1585,7 +1635,7 @@ function loadGame() {
       $('game-title').classList.add('hidden-title');
       $('mode-display').innerText = state.gameMode === 'nuzlocke' ? '☠️ Nuzlocke' : 'Normal';
       
-      startBattle(); // Restart battle gen to avoid sync issues
+      startBattle(); 
     } catch(e) {
       console.error(e);
       alert("Error al cargar partida.");
@@ -1593,6 +1643,5 @@ function loadGame() {
   }
 }
 </script>
-<script type="module" src="/index.tsx"></script>
 </body>
 </html>
