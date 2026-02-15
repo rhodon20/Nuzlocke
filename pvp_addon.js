@@ -519,47 +519,47 @@ async function resolvePvPRound() {
         moveKey: first.isP1 ? pvpState.p1.pendingMove : pvpState.p2.pendingMove
     });
 
-    if (second.mon.hp <= 0) {
-        await handlePvPFaint(second.isP1);
+    if (second.mon.hp <= 0 || first.mon.hp <= 0) {
+        await resolvePendingPvPFaints();
+        if (!pvpState.active) return;
     } else {
         await wait(500);
         await executePvPMove(second.mon, first.mon, second.move, second.isP1, {
             canFlinchTarget: false,
             moveKey: second.isP1 ? pvpState.p1.pendingMove : pvpState.p2.pendingMove
         });
-
-        if (first.mon.hp <= 0) {
-            await handlePvPFaint(first.isP1);
-        }
+        await resolvePendingPvPFaints();
+        if (!pvpState.active) return;
     }
 
-    if (p1Mon.hp > 0 && p2Mon.hp > 0) {
-        await runStatusDamage(p1Mon, true);
-        await runStatusDamage(p2Mon, false);
+    const endP1 = pvpState.p1.team[pvpState.p1.activeIdx];
+    const endP2 = pvpState.p2.team[pvpState.p2.activeIdx];
+    if (endP1 && endP2 && endP1.hp > 0 && endP2.hp > 0) {
+        await runStatusDamage(endP1, true);
+        await runStatusDamage(endP2, false);
         if (typeof runLeechSeed === 'function') {
-            if (p1Mon.hp > 0) runLeechSeed(p1Mon, true);
-            if (p2Mon.hp > 0) runLeechSeed(p2Mon, false);
+            if (endP1.hp > 0) runLeechSeed(endP1, true);
+            if (endP2.hp > 0) runLeechSeed(endP2, false);
         }
         if (typeof runPerishCountdown === 'function') {
-            if (p1Mon.hp > 0) runPerishCountdown(p1Mon, true);
-            if (p2Mon.hp > 0) runPerishCountdown(p2Mon, false);
+            if (endP1.hp > 0) runPerishCountdown(endP1, true);
+            if (endP2.hp > 0) runPerishCountdown(endP2, false);
         }
         if (typeof runWeatherDamage === 'function') {
-            if (p1Mon.hp > 0) runWeatherDamage(p1Mon);
-            if (p2Mon.hp > 0) runWeatherDamage(p2Mon);
+            if (endP1.hp > 0) runWeatherDamage(endP1);
+            if (endP2.hp > 0) runWeatherDamage(endP2);
         }
         if (typeof runBattleEventEndTurn === 'function') {
-            if (p1Mon.hp > 0) runBattleEventEndTurn(p1Mon);
-            if (p2Mon.hp > 0) runBattleEventEndTurn(p2Mon);
+            if (endP1.hp > 0) runBattleEventEndTurn(endP1);
+            if (endP2.hp > 0) runBattleEventEndTurn(endP2);
         }
         if (typeof decayCombo === 'function') {
-            decayCombo(p1Mon);
-            decayCombo(p2Mon);
+            decayCombo(endP1);
+            decayCombo(endP2);
         }
         if (typeof tickFieldEndTurn === 'function') tickFieldEndTurn();
-
-        if (p1Mon.hp <= 0) await handlePvPFaint(true);
-        else if (p2Mon.hp <= 0) await handlePvPFaint(false);
+        await resolvePendingPvPFaints();
+        if (!pvpState.active) return;
     }
 
     const curP1 = pvpState.p1.team[pvpState.p1.activeIdx];
@@ -574,6 +574,29 @@ async function resolvePvPRound() {
         } else {
             pvpState.turnPhase = 0;
             showInterTurnOverlay('Jugador 1');
+        }
+    }
+}
+
+async function resolvePendingPvPFaints() {
+    let guard = 0;
+    while (guard < 12) {
+        guard++;
+        if (!pvpState.active) return;
+
+        const p1Mon = pvpState.p1.team[pvpState.p1.activeIdx];
+        const p2Mon = pvpState.p2.team[pvpState.p2.activeIdx];
+        const p1Dead = !p1Mon || p1Mon.hp <= 0;
+        const p2Dead = !p2Mon || p2Mon.hp <= 0;
+        if (!p1Dead && !p2Dead) return;
+
+        if (p1Dead) {
+            await handlePvPFaint(true);
+            if (!pvpState.active) return;
+        }
+        if (p2Dead) {
+            await handlePvPFaint(false);
+            if (!pvpState.active) return;
         }
     }
 }
@@ -632,6 +655,8 @@ function endPvPGame(p1Wins) {
     if (pvpState.mode === 'online' && typeof window.onOnlinePvPEnd === 'function') {
         window.onOnlinePvPEnd(!!p1Wins);
     }
+    pvpState.active = false;
+    if (pvpState.online) pvpState.online.awaitingLocalMove = false;
 
     const winner = p1Wins ? 'JUGADOR 1' : 'JUGADOR 2';
     const color = p1Wins ? '#2196f3' : '#f44336';
