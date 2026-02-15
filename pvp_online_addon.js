@@ -36,7 +36,32 @@
   }
 
   function hasQrScanSupport() {
-    return typeof BarcodeDetector !== 'undefined' && typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
+    return typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
+  }
+
+  function hasBarcodeDetectorSupport() {
+    return typeof BarcodeDetector !== 'undefined';
+  }
+
+  async function ensureJsQrLoaded() {
+    if (typeof window === 'undefined') return false;
+    if (typeof window.jsQR === 'function') return true;
+    await new Promise((resolve, reject) => {
+      const existing = document.getElementById('jsqr-lib');
+      if (existing) {
+        existing.addEventListener('load', () => resolve(), { once: true });
+        existing.addEventListener('error', () => reject(new Error('jsQR load error')), { once: true });
+        return;
+      }
+      const s = document.createElement('script');
+      s.id = 'jsqr-lib';
+      s.src = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js';
+      s.async = true;
+      s.onload = () => resolve();
+      s.onerror = () => reject(new Error('jsQR load error'));
+      document.head.appendChild(s);
+    });
+    return typeof window.jsQR === 'function';
   }
 
   function isWebRtcAvailable() {
@@ -85,7 +110,7 @@
       ? `<button class="btn-action" onclick="${opts.scanActionFn}()">${opts.scanLabel || 'Escanear QR'}</button>`
       : '';
     const scanWarn = opts.scanActionFn && !hasQrScanSupport()
-      ? `<div style="font-size:.72rem; color:#ffb74d;">Escaneo QR no disponible en este navegador.</div>`
+      ? `<div style="font-size:.72rem; color:#ffb74d;">Escaneo QR no disponible (sin acceso a camara).</div>`
       : '';
 
     body.innerHTML = `
@@ -123,7 +148,7 @@
           <button class="btn-action" onclick="closeOnlinePvPOverlay()">Cerrar</button>
         </div>
       `);
-    }, 18000);
+    }, 90000);
   }
 
   function setStatusText(text) {
@@ -145,7 +170,7 @@
 
   async function startQrScanInto(textareaId) {
     if (!hasQrScanSupport()) {
-      alert('Escaneo QR no disponible en este navegador.');
+      alert('Escaneo QR no disponible: no hay acceso a camara.');
       return;
     }
     stopQrScan();
@@ -171,17 +196,39 @@
       video.srcObject = stream;
       await video.play();
 
-      const detector = new BarcodeDetector({ formats: ['qr_code'] });
+      let detector = null;
+      if (hasBarcodeDetectorSupport()) {
+        detector = new BarcodeDetector({ formats: ['qr_code'] });
+      } else {
+        await ensureJsQrLoaded();
+      }
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
       const tick = async () => {
         if (!onlinePvp.scanActive) return;
         try {
-          const codes = await detector.detect(video);
-          if (Array.isArray(codes) && codes[0]?.rawValue) {
-            const raw = String(codes[0].rawValue || '').trim();
-            const target = document.getElementById(textareaId);
-            if (target) target.value = raw;
-            stopQrScan();
-            return;
+          if (detector) {
+            const codes = await detector.detect(video);
+            if (Array.isArray(codes) && codes[0]?.rawValue) {
+              const raw = String(codes[0].rawValue || '').trim();
+              const target = document.getElementById(textareaId);
+              if (target) target.value = raw;
+              stopQrScan();
+              return;
+            }
+          } else if (ctx && typeof window.jsQR === 'function' && video.videoWidth > 0 && video.videoHeight > 0) {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const result = window.jsQR(frame.data, canvas.width, canvas.height, { inversionAttempts: 'attemptBoth' });
+            if (result && result.data) {
+              const raw = String(result.data || '').trim();
+              const target = document.getElementById(textareaId);
+              if (target) target.value = raw;
+              stopQrScan();
+              return;
+            }
           }
         } catch {}
         setTimeout(tick, 220);
@@ -356,7 +403,6 @@
       scanActionFn: 'onlinePvPScanAnswer',
       scanLabel: 'Escanear respuesta'
     });
-    armChannelOpenTimeout('Host');
     onlinePvp.waitingAnswer = true;
   }
 
