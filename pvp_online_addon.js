@@ -165,8 +165,19 @@
       <button class="btn-action" onclick="onlinePvPHost('classic')">Crear partida Clasica (Host)</button>
       <button class="btn-action" onclick="onlinePvPHost('draft')">Crear partida Draft (Host)</button>
       <button class="btn-action" onclick="onlinePvPJoinPrompt()">Unirse (Guest)</button>
-      <div style="font-size:.75rem; color:#9aa3c7; line-height:1.35;">
-        Flujo: Host crea codigo oferta -> Guest responde con codigo respuesta -> Host pega respuesta.
+      <div style="display:grid; gap:6px; margin-top:4px; background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.12); border-radius:10px; padding:8px;">
+        <div style="font-size:.8rem; color:#ffd54a; font-weight:800;">Guia rapida de vinculacion (Host + Guest)</div>
+        <div style="font-size:.74rem; color:#9aa3c7; line-height:1.35;">
+          <b>1)</b> El <b>Host</b> crea partida y muestra su QR de oferta.<br>
+          <b>2)</b> El <b>Guest</b> escanea ese QR.<br>
+          <b>3)</b> Si hay varios QR, el <b>Host</b> pasa todos en orden y el <b>Guest</b> los escanea todos.<br>
+          <b>4)</b> Cuando termina, el <b>Guest</b> genera su QR de respuesta.<br>
+          <b>5)</b> Ahora al reves: el <b>Host</b> escanea el QR (o los QR) del <b>Guest</b>.<br>
+          <b>6)</b> Al completar la respuesta, el <b>Host</b> inicia la partida automaticamente.
+        </div>
+        <div style="font-size:.72rem; color:#b0b8d8;">
+          Consejo: si un QR falla, usa Compartir o Copiar/Pegar.
+        </div>
       </div>
     `);
   }
@@ -535,6 +546,7 @@
   }
 
   function startOnlineRandomMatch(modeLabel = 'ONLINE REVANCHA') {
+    if (typeof window.closePvPEndOverlay === 'function') window.closePvPEndOverlay();
     const t1 = randomOnlineTeam();
     const t2 = randomOnlineTeam();
     startPvPMatch(t1, t2, modeLabel, { mode: 'online', onlineLocalSide: 1 });
@@ -707,6 +719,7 @@
 
     if (msg.type === 'INIT_MATCH') {
       if (onlinePvp.role !== 'guest') return;
+      if (typeof window.closePvPEndOverlay === 'function') window.closePvPEndOverlay();
       const team1 = Array.isArray(msg.team1) ? msg.team1 : [];
       const team2 = Array.isArray(msg.team2) ? msg.team2 : [];
       startPvPMatch(team1, team2, 'ONLINE', { mode: 'online', onlineLocalSide: 2 });
@@ -743,6 +756,7 @@
 
     if (msg.type === 'DRAFT_COMPLETE') {
       if (onlinePvp.role !== 'guest') return;
+      if (typeof window.closePvPEndOverlay === 'function') window.closePvPEndOverlay();
       const team1 = Array.isArray(msg.team1) ? msg.team1 : [];
       const team2 = Array.isArray(msg.team2) ? msg.team2 : [];
       startPvPMatch(team1, team2, 'ONLINE DRAFT', { mode: 'online', onlineLocalSide: 2 });

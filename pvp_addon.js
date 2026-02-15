@@ -670,8 +670,22 @@ function endPvPGame(p1Wins) {
             </button>
     ` : '';
 
-    const container = document.getElementById('game-container');
-    container.innerHTML = `
+    let overlay = document.getElementById('pvp-end-overlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'pvp-end-overlay';
+        overlay.style.position = 'absolute';
+        overlay.style.inset = '0';
+        overlay.style.zIndex = '1600';
+        overlay.style.background = 'rgba(11,16,32,0.96)';
+        overlay.style.padding = '12px';
+        overlay.style.boxSizing = 'border-box';
+        overlay.style.overflowY = 'auto';
+        const container = document.getElementById('game-container');
+        if (container) container.appendChild(overlay);
+    }
+
+    overlay.innerHTML = `
         <div style="text-align:center; padding:20px; opacity:0;" id="end-screen">
             <h1 style="color:${color}; font-size:3rem; margin-bottom:10px;">¡${winner} GANA!</h1>
             <p>Fin del combate.</p>
@@ -703,6 +717,11 @@ function endPvPGame(p1Wins) {
         easing: 'easeOutElastic(1, .8)'
     });
 }
+
+window.closePvPEndOverlay = function closePvPEndOverlay() {
+    const overlay = document.getElementById('pvp-end-overlay');
+    if (overlay) overlay.remove();
+};
 
 function exportPvPSnapshot() {
     return {
