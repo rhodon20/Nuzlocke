@@ -19,7 +19,10 @@
     matchStarted: false,
     scanStream: null,
     scanActive: false,
-    channelOpenTimeoutId: null
+    channelOpenTimeoutId: null,
+    qrChunks: null,
+    qrChunkIndex: 0,
+    scanChunkSession: null
   };
 
   function encodeSignal(obj) {
@@ -33,6 +36,55 @@
   function buildQrUrl(text) {
     const payload = encodeURIComponent(text || '');
     return `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${payload}`;
+  }
+
+  function buildSignalChunks(rawText, chunkSize = 700) {
+    const text = String(rawText || '');
+    if (!text) return [];
+    if (text.length <= chunkSize) return [text];
+    const id = Math.random().toString(36).slice(2, 8).toUpperCase();
+    const chunks = [];
+    let idx = 0;
+    for (let i = 0; i < text.length; i += chunkSize) {
+      idx += 1;
+      chunks.push({ idx, data: text.slice(i, i + chunkSize) });
+    }
+    const total = chunks.length;
+    return chunks.map(c => `PVPSEG:${id}:${c.idx}:${total}:${c.data}`);
+  }
+
+  function parseSignalChunk(raw) {
+    const text = String(raw || '').trim();
+    if (!text.startsWith('PVPSEG:')) return null;
+    const parts = text.split(':');
+    if (parts.length < 5) return null;
+    const id = parts[1];
+    const idx = Number(parts[2]);
+    const total = Number(parts[3]);
+    const data = parts.slice(4).join(':');
+    if (!id || !Number.isFinite(idx) || !Number.isFinite(total) || !data) return null;
+    return { id, idx, total, data };
+  }
+
+  function rebuildChunkedSignal(session) {
+    if (!session || !session.id || !Number.isFinite(session.total) || !session.parts) return null;
+    for (let i = 1; i <= session.total; i++) {
+      if (!session.parts[i]) return null;
+    }
+    let out = '';
+    for (let i = 1; i <= session.total; i++) out += session.parts[i];
+    return out;
+  }
+
+  function renderQrChunkPreview() {
+    if (!onlinePvp.qrChunks || !onlinePvp.qrChunks.length) return;
+    const idx = Math.max(0, Math.min(onlinePvp.qrChunkIndex || 0, onlinePvp.qrChunks.length - 1));
+    const text = onlinePvp.qrChunks[idx];
+    const img = document.getElementById('online-qr-img');
+    const label = document.getElementById('online-qr-label');
+    if (img) img.src = buildQrUrl(text);
+    if (label) label.innerText = `QR ${idx + 1}/${onlinePvp.qrChunks.length}`;
+    onlinePvp.qrChunkIndex = idx;
   }
 
   function hasQrScanSupport() {
@@ -112,6 +164,17 @@
     const scanWarn = opts.scanActionFn && !hasQrScanSupport()
       ? `<div style="font-size:.72rem; color:#ffb74d;">Escaneo QR no disponible (sin acceso a camara).</div>`
       : '';
+    const qrChunks = (showQr ? buildSignalChunks(value) : []);
+    onlinePvp.qrChunks = qrChunks;
+    onlinePvp.qrChunkIndex = 0;
+    const qrControls = qrChunks.length > 1 ? `
+      <div style="display:grid; grid-template-columns:1fr auto 1fr; gap:6px; align-items:center; margin-top:4px;">
+        <button class="btn-action" onclick="onlinePvPQrPrev()">QR anterior</button>
+        <div id="online-qr-label" style="font-size:.75rem; color:#ffd54a; text-align:center;">QR 1/${qrChunks.length}</div>
+        <button class="btn-action" onclick="onlinePvPQrNext()">QR siguiente</button>
+      </div>
+      <div style="font-size:.7rem; color:#9aa3c7;">Este codigo es largo; escanea todos los QR en orden.</div>
+    ` : '';
 
     body.innerHTML = `
       <div style="font-size:.8rem; color:#ffd54a; font-weight:800;">${title}</div>
@@ -122,7 +185,8 @@
       </div>
       ${scanBtn}
       ${scanWarn}
-      ${showQr ? `<div style="display:flex; justify-content:center; margin-top:4px;"><img alt="QR" src="${buildQrUrl(value)}" style="width:190px; height:190px; border-radius:8px; border:1px solid rgba(255,255,255,.25); background:#fff;"></div>` : ''}
+      ${showQr ? `<div style="display:flex; justify-content:center; margin-top:4px;"><img id="online-qr-img" alt="QR" src="${buildQrUrl(qrChunks[0] || '')}" style="width:190px; height:190px; border-radius:8px; border:1px solid rgba(255,255,255,.25); background:#fff;"></div>` : ''}
+      ${showQr ? qrControls : ''}
       ${extraHtml}
     `;
   }
@@ -160,6 +224,7 @@
 
   function stopQrScan() {
     onlinePvp.scanActive = false;
+    onlinePvp.scanChunkSession = null;
     if (onlinePvp.scanStream) {
       try { onlinePvp.scanStream.getTracks().forEach(t => t.stop()); } catch {}
     }
@@ -183,6 +248,7 @@
     box.style.gap = '6px';
     box.innerHTML = `
       <video id="online-qr-video" autoplay playsinline style="width:100%; max-height:220px; border-radius:8px; border:1px solid rgba(255,255,255,.2); background:#000;"></video>
+      <div id="online-qr-scan-status" style="font-size:.74rem; color:#9aa3c7;">Apunta al QR.</div>
       <button class="btn-action" onclick="onlinePvPStopScan()">Detener escaneo</button>
     `;
     body.appendChild(box);
@@ -211,10 +277,29 @@
             const codes = await detector.detect(video);
             if (Array.isArray(codes) && codes[0]?.rawValue) {
               const raw = String(codes[0].rawValue || '').trim();
+              const parsed = parseSignalChunk(raw);
               const target = document.getElementById(textareaId);
-              if (target) target.value = raw;
-              stopQrScan();
-              return;
+              if (parsed) {
+                if (!onlinePvp.scanChunkSession || onlinePvp.scanChunkSession.id !== parsed.id || onlinePvp.scanChunkSession.total !== parsed.total) {
+                  onlinePvp.scanChunkSession = { id: parsed.id, total: parsed.total, parts: {} };
+                }
+                onlinePvp.scanChunkSession.parts[parsed.idx] = parsed.data;
+                const statusEl = document.getElementById('online-qr-scan-status');
+                if (statusEl) {
+                  const count = Object.keys(onlinePvp.scanChunkSession.parts).length;
+                  statusEl.innerText = `QR capturado ${count}/${onlinePvp.scanChunkSession.total}. Sigue escaneando...`;
+                }
+                const assembled = rebuildChunkedSignal(onlinePvp.scanChunkSession);
+                if (assembled) {
+                  if (target) target.value = assembled;
+                  stopQrScan();
+                  return;
+                }
+              } else {
+                if (target) target.value = raw;
+                stopQrScan();
+                return;
+              }
             }
           } else if (ctx && typeof window.jsQR === 'function' && video.videoWidth > 0 && video.videoHeight > 0) {
             canvas.width = video.videoWidth;
@@ -224,10 +309,29 @@
             const result = window.jsQR(frame.data, canvas.width, canvas.height, { inversionAttempts: 'attemptBoth' });
             if (result && result.data) {
               const raw = String(result.data || '').trim();
+              const parsed = parseSignalChunk(raw);
               const target = document.getElementById(textareaId);
-              if (target) target.value = raw;
-              stopQrScan();
-              return;
+              if (parsed) {
+                if (!onlinePvp.scanChunkSession || onlinePvp.scanChunkSession.id !== parsed.id || onlinePvp.scanChunkSession.total !== parsed.total) {
+                  onlinePvp.scanChunkSession = { id: parsed.id, total: parsed.total, parts: {} };
+                }
+                onlinePvp.scanChunkSession.parts[parsed.idx] = parsed.data;
+                const statusEl = document.getElementById('online-qr-scan-status');
+                if (statusEl) {
+                  const count = Object.keys(onlinePvp.scanChunkSession.parts).length;
+                  statusEl.innerText = `QR capturado ${count}/${onlinePvp.scanChunkSession.total}. Sigue escaneando...`;
+                }
+                const assembled = rebuildChunkedSignal(onlinePvp.scanChunkSession);
+                if (assembled) {
+                  if (target) target.value = assembled;
+                  stopQrScan();
+                  return;
+                }
+              } else {
+                if (target) target.value = raw;
+                stopQrScan();
+                return;
+              }
             }
           }
         } catch {}
@@ -248,6 +352,8 @@
     onlinePvp.waitingAnswer = false;
     onlinePvp.connected = false;
     onlinePvp.matchStarted = false;
+    onlinePvp.qrChunks = null;
+    onlinePvp.qrChunkIndex = 0;
     stopQrScan();
     clearChannelTimeout();
     if (onlinePvp.dc) {
@@ -596,6 +702,18 @@
 
   window.onlinePvPStopScan = function onlinePvPStopScan() {
     stopQrScan();
+  };
+
+  window.onlinePvPQrNext = function onlinePvPQrNext() {
+    if (!onlinePvp.qrChunks || onlinePvp.qrChunks.length <= 1) return;
+    onlinePvp.qrChunkIndex = (onlinePvp.qrChunkIndex + 1) % onlinePvp.qrChunks.length;
+    renderQrChunkPreview();
+  };
+
+  window.onlinePvPQrPrev = function onlinePvPQrPrev() {
+    if (!onlinePvp.qrChunks || onlinePvp.qrChunks.length <= 1) return;
+    onlinePvp.qrChunkIndex = (onlinePvp.qrChunkIndex - 1 + onlinePvp.qrChunks.length) % onlinePvp.qrChunks.length;
+    renderQrChunkPreview();
   };
 
   window.onlinePvPRestart = function onlinePvPRestart() {
