@@ -1,9 +1,15 @@
 ﻿(function initOnlinePvPAddon() {
-  const STUN_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }];
+  const STUN_SERVERS = [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+    { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+    { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' }
+  ];
 
   const onlinePvp = {
     active: false,
-    role: null, // 'host' | 'guest'
+    role: null,
     pc: null,
     dc: null,
     localMove: null,
@@ -12,7 +18,8 @@
     connected: false,
     matchStarted: false,
     scanStream: null,
-    scanActive: false
+    scanActive: false,
+    channelOpenTimeoutId: null
   };
 
   function encodeSignal(obj) {
@@ -55,16 +62,19 @@
     return overlay;
   }
 
-  function renderLobbyHome() {
+  function setLobbyMessage(html) {
     const body = document.getElementById('online-pvp-body');
-    if (!body) return;
-    body.innerHTML = `
+    if (body) body.innerHTML = html;
+  }
+
+  function renderLobbyHome() {
+    setLobbyMessage(`
       <button class="btn-action" onclick="onlinePvPHost()">Crear partida (Host)</button>
       <button class="btn-action" onclick="onlinePvPJoinPrompt()">Unirse (Guest)</button>
       <div style="font-size:.75rem; color:#9aa3c7; line-height:1.35;">
         Flujo: Host crea codigo oferta -> Guest responde con codigo respuesta -> Host pega respuesta.
       </div>
-    `;
+    `);
   }
 
   function showTextStep(title, textareaId, value, actionLabel, actionFnName, extraHtml = '', opts = {}) {
@@ -77,6 +87,7 @@
     const scanWarn = opts.scanActionFn && !hasQrScanSupport()
       ? `<div style="font-size:.72rem; color:#ffb74d;">Escaneo QR no disponible en este navegador.</div>`
       : '';
+
     body.innerHTML = `
       <div style="font-size:.8rem; color:#ffd54a; font-weight:800;">${title}</div>
       <textarea id="${textareaId}" style="width:100%; min-height:120px; resize:vertical; background:#0f1631; color:#e8ecff; border:1px solid rgba(255,255,255,.2); border-radius:8px; padding:8px;">${value || ''}</textarea>
@@ -91,6 +102,30 @@
     `;
   }
 
+  function clearChannelTimeout() {
+    if (onlinePvp.channelOpenTimeoutId) {
+      clearTimeout(onlinePvp.channelOpenTimeoutId);
+      onlinePvp.channelOpenTimeoutId = null;
+    }
+  }
+
+  function armChannelOpenTimeout(roleLabel) {
+    clearChannelTimeout();
+    onlinePvp.channelOpenTimeoutId = setTimeout(() => {
+      if (onlinePvp.connected) return;
+      setLobbyMessage(`
+        <div style="font-size:.82rem; color:#ff8a80; font-weight:700;">No se pudo abrir el canal a tiempo.</div>
+        <div style="font-size:.74rem; color:#9aa3c7; line-height:1.35;">
+          Rol: ${roleLabel}. Repite offer/answer. En redes moviles estrictas puede fallar NAT traversal.
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+          <button class="btn-action" onclick="onlinePvPRestart()">Reiniciar flujo</button>
+          <button class="btn-action" onclick="closeOnlinePvPOverlay()">Cerrar</button>
+        </div>
+      `);
+    }, 18000);
+  }
+
   function setStatusText(text) {
     if (typeof pvpState !== 'undefined' && pvpState?.online) {
       pvpState.online.statusText = text;
@@ -98,31 +133,10 @@
     }
   }
 
-  function resetOnlineState() {
-    onlinePvp.active = false;
-    onlinePvp.role = null;
-    onlinePvp.localMove = null;
-    onlinePvp.remoteMove = null;
-    onlinePvp.waitingAnswer = false;
-    onlinePvp.connected = false;
-    onlinePvp.matchStarted = false;
-    stopQrScan();
-    if (onlinePvp.dc) {
-      try { onlinePvp.dc.close(); } catch {}
-    }
-    if (onlinePvp.pc) {
-      try { onlinePvp.pc.close(); } catch {}
-    }
-    onlinePvp.dc = null;
-    onlinePvp.pc = null;
-  }
-
   function stopQrScan() {
     onlinePvp.scanActive = false;
     if (onlinePvp.scanStream) {
-      try {
-        onlinePvp.scanStream.getTracks().forEach(t => t.stop());
-      } catch {}
+      try { onlinePvp.scanStream.getTracks().forEach(t => t.stop()); } catch {}
     }
     onlinePvp.scanStream = null;
     const box = document.getElementById('online-qr-scan-box');
@@ -179,6 +193,26 @@
     }
   }
 
+  function resetOnlineState() {
+    onlinePvp.active = false;
+    onlinePvp.role = null;
+    onlinePvp.localMove = null;
+    onlinePvp.remoteMove = null;
+    onlinePvp.waitingAnswer = false;
+    onlinePvp.connected = false;
+    onlinePvp.matchStarted = false;
+    stopQrScan();
+    clearChannelTimeout();
+    if (onlinePvp.dc) {
+      try { onlinePvp.dc.close(); } catch {}
+    }
+    if (onlinePvp.pc) {
+      try { onlinePvp.pc.close(); } catch {}
+    }
+    onlinePvp.dc = null;
+    onlinePvp.pc = null;
+  }
+
   async function waitIceGatheringComplete(pc) {
     if (!pc) return;
     if (pc.iceGatheringState === 'complete') return;
@@ -193,8 +227,22 @@
       setTimeout(() => {
         pc.removeEventListener('icegatheringstatechange', handler);
         resolve();
-      }, 3500);
+      }, 12000);
     });
+  }
+
+  function bindPeerDiagnostics(pc) {
+    if (!pc) return;
+    pc.oniceconnectionstatechange = () => {
+      const st = pc.iceConnectionState;
+      if (st === 'failed') log('ICE fallo en PvP online.');
+    };
+    pc.onconnectionstatechange = () => {
+      const st = pc.connectionState;
+      if (st === 'failed' || st === 'disconnected') {
+        log('Conexion PvP online interrumpida.');
+      }
+    };
   }
 
   function sendOnline(msg) {
@@ -257,9 +305,9 @@
   function wireDataChannel(dc) {
     onlinePvp.dc = dc;
     dc.onopen = () => {
+      clearChannelTimeout();
       onlinePvp.connected = true;
-      const body = document.getElementById('online-pvp-body');
-      if (body) body.innerHTML = '<div style="font-size:.8rem; color:#4caf50;">Conexion establecida. Iniciando partida...</div>';
+      setLobbyMessage('<div style="font-size:.8rem; color:#4caf50;">Conexion establecida. Iniciando partida...</div>');
       if (onlinePvp.role === 'host') {
         const t1 = randomOnlineTeam();
         const t2 = randomOnlineTeam();
@@ -279,6 +327,9 @@
         log('Conexion online cerrada.');
       }
     };
+    dc.onerror = () => {
+      log('Error en canal PvP online.');
+    };
   }
 
   async function createHostFlow() {
@@ -290,6 +341,7 @@
     onlinePvp.role = 'host';
     const pc = new RTCPeerConnection({ iceServers: STUN_SERVERS });
     onlinePvp.pc = pc;
+    bindPeerDiagnostics(pc);
 
     const dc = pc.createDataChannel('poke-online', { ordered: true });
     wireDataChannel(dc);
@@ -304,6 +356,7 @@
       scanActionFn: 'onlinePvPScanAnswer',
       scanLabel: 'Escanear respuesta'
     });
+    armChannelOpenTimeout('Host');
     onlinePvp.waitingAnswer = true;
   }
 
@@ -314,9 +367,9 @@
       const data = decodeSignal(el.value);
       if (data.type !== 'answer' || !data.sdp) throw new Error('Respuesta invalida');
       await onlinePvp.pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
-      const body = document.getElementById('online-pvp-body');
-      if (body) body.innerHTML = '<div style="font-size:.8rem; color:#ffd54a;">Respuesta aplicada. Esperando canal...</div>';
-    } catch (e) {
+      setLobbyMessage('<div style="font-size:.8rem; color:#ffd54a;">Respuesta aplicada. Esperando canal (puede tardar unos segundos)...</div>');
+      armChannelOpenTimeout('Host');
+    } catch {
       alert('No se pudo aplicar la respuesta.');
     }
   }
@@ -349,6 +402,7 @@
     onlinePvp.role = 'guest';
     const pc = new RTCPeerConnection({ iceServers: STUN_SERVERS });
     onlinePvp.pc = pc;
+    bindPeerDiagnostics(pc);
     pc.ondatachannel = ev => wireDataChannel(ev.channel);
 
     await pc.setRemoteDescription(new RTCSessionDescription(offerData.sdp));
@@ -360,11 +414,12 @@
     showTextStep('Codigo respuesta (guest)', 'online-answer-text', payload, 'Esperar inicio', 'onlinePvPWaitStart', '<div style="font-size:.75rem; color:#9aa3c7;">Copia este codigo y envialo al host.</div>', {
       showQr: true
     });
+    armChannelOpenTimeout('Guest');
   }
 
   function waitStartFlow() {
-    const body = document.getElementById('online-pvp-body');
-    if (body) body.innerHTML = '<div style="font-size:.8rem; color:#ffd54a;">Esperando que el host inicie partida...</div>';
+    setLobbyMessage('<div style="font-size:.8rem; color:#ffd54a;">Esperando que el host inicie partida...</div>');
+    armChannelOpenTimeout('Guest');
   }
 
   async function tryResolveHostRound() {
@@ -460,6 +515,7 @@
 
   window.closeOnlinePvPOverlay = function closeOnlinePvPOverlay() {
     stopQrScan();
+    clearChannelTimeout();
     const ov = ensureOverlay();
     ov.style.display = 'none';
   };
@@ -494,6 +550,11 @@
 
   window.onlinePvPStopScan = function onlinePvPStopScan() {
     stopQrScan();
+  };
+
+  window.onlinePvPRestart = function onlinePvPRestart() {
+    resetOnlineState();
+    renderLobbyHome();
   };
 
   window.handleOnlinePvPInput = handleLocalMove;

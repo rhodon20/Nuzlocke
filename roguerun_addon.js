@@ -200,7 +200,7 @@
   function ensureRogueState() {
     if (!state.rogueRun || typeof state.rogueRun !== 'object') {
       state.rogueRun = {
-        active: true,
+        active: false,
         totalFloors: ROGUERUN_TOTAL_FLOORS,
         floor: 0,
         nodesByFloor: [],
@@ -656,7 +656,7 @@
   });
 
   window.addEventListener('resize', () => {
-    const rr = ensureRogueState();
-    if (rr.active && !rr.inBattle) renderRogueRunOverlay();
+    const rr = state.rogueRun;
+    if (rr && rr.active && !rr.inBattle) renderRogueRunOverlay();
   });
 })();

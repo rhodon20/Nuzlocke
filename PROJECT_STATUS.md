@@ -616,6 +616,16 @@
 - Added graceful fallback UX:
   - if scan is unsupported, flow continues with text copy/paste.
 
+## Exploratory - Mobile Overlay Fix & Online Connectivity Diagnostics (Phase 27 Added)
+- Fixed unintended RogueRun overlay popup on mobile scroll/resize:
+  - RogueRun state no longer auto-initializes as active
+  - resize handler now reads existing state without forcing activation.
+- Improved online PvP connection robustness and feedback:
+  - expanded ICE server list (multiple STUN + public TURN fallback entries)
+  - longer ICE gather window for manual signaling payloads
+  - explicit channel-open timeout with retry UI instead of silent waiting states
+  - added connection diagnostics logs for failed/disconnected states.
+
 ## Pending Roadmap (To Be Added)
 ### Short Term (Next Steps)
 - Expand non-damage move semantics:
