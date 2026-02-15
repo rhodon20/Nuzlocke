@@ -673,6 +673,9 @@
 
 ## Pending Roadmap (To Be Added)
 ### Short Term (Next Steps)
+- PvP Online parity (host/guest):
+  - Sync del `combat-log` en guest con eventos de ronda enviados por host.
+  - Corregir orientación del modal de stats/análisis (`info_addon`) para que use `onlineLocalSide` en vez de `turnPhase` durante PvP Online.
 - Expand non-damage move semantics:
   - move-specific behaviors (setup punishers, recovery denial, etc.)
   - support for end-of-turn and side-field effects.
