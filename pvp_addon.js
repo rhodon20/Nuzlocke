@@ -562,7 +562,11 @@ async function resolvePvPRound() {
         else if (p2Mon.hp <= 0) await handlePvPFaint(false);
     }
 
-    if (p1Mon.hp > 0 && p2Mon.hp > 0) {
+    const curP1 = pvpState.p1.team[pvpState.p1.activeIdx];
+    const curP2 = pvpState.p2.team[pvpState.p2.activeIdx];
+    const bothSidesCanContinue = !!curP1 && !!curP2 && curP1.hp > 0 && curP2.hp > 0;
+
+    if (bothSidesCanContinue) {
         if (pvpState.mode === 'online') {
             if (typeof window.onOnlinePvPRoundResolved === 'function') {
                 window.onOnlinePvPRoundResolved();
@@ -612,8 +616,13 @@ async function handlePvPFaint(isP1Dead) {
         }
         log(`🔄 ${deadPlayer.name} envía a <b>${newMon.name}</b>!`);
 
-        pvpState.turnPhase = 0;
-        showInterTurnOverlay('Jugador 1');
+        if (pvpState.mode === 'online') {
+            pvpState.turnPhase = 0;
+            renderPvP();
+        } else {
+            pvpState.turnPhase = 0;
+            showInterTurnOverlay('Jugador 1');
+        }
     } else {
         endPvPGame(!isP1Dead);
     }
