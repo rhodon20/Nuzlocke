@@ -26,6 +26,8 @@
     scanDeviceIds: [],
     scanDeviceLabels: [],
     scanDeviceIdx: 0,
+    scanCameraOptions: [],
+    scanCameraIdx: 0,
     scanTargetTextareaId: null,
     scanSessionId: 0
   };
@@ -268,16 +270,51 @@
     return 0;
   }
 
-  function refreshScanCameraHint() {
-    const el = document.getElementById('online-qr-camera-label');
-    if (!el) return;
-    if (!onlinePvp.scanDeviceIds.length) {
-      el.innerText = 'Camara: auto';
-      return;
+  function buildScanCameraOptions(devices) {
+    const out = [];
+    out.push({ key: 'rear_ideal', label: 'Trasera (ideal)', constraints: { facingMode: { ideal: 'environment' } } });
+    out.push({ key: 'rear_exact', label: 'Trasera (exacta)', constraints: { facingMode: { exact: 'environment' } } });
+    out.push({ key: 'front_ideal', label: 'Frontal (ideal)', constraints: { facingMode: { ideal: 'user' } } });
+
+    if (Array.isArray(devices) && devices.length) {
+      devices.forEach((d, i) => {
+        const name = (d.label || '').trim() || `Camara ${i + 1}`;
+        out.push({ key: `dev_${d.deviceId}`, label: `Dispositivo: ${name}`, constraints: { deviceId: { exact: d.deviceId } } });
+      });
     }
-    const idx = Math.max(0, Math.min(onlinePvp.scanDeviceIdx, onlinePvp.scanDeviceIds.length - 1));
-    const name = onlinePvp.scanDeviceLabels[idx] || `Camara ${idx + 1}`;
-    el.innerText = `Camara: ${name}`;
+    return out;
+  }
+
+  function chooseInitialCameraOptionIndex(options) {
+    if (!Array.isArray(options) || !options.length) return 0;
+    const devStart = options.findIndex(o => String(o.key || '').startsWith('dev_'));
+    if (devStart < 0) return 0;
+    const devOptions = options.slice(devStart);
+    const fakeDevices = devOptions.map(o => ({ label: o.label, deviceId: o.key.replace(/^dev_/, '') }));
+    const pref = chooseInitialCameraIndex(fakeDevices);
+    return Math.max(0, devStart + pref);
+  }
+
+  function refreshScanCameraSelector() {
+    const select = document.getElementById('online-qr-camera-select');
+    if (!select) return;
+    select.innerHTML = '';
+    (onlinePvp.scanCameraOptions || []).forEach((opt, idx) => {
+      const op = document.createElement('option');
+      op.value = String(idx);
+      op.textContent = opt.label;
+      select.appendChild(op);
+    });
+    const idx = Math.max(0, Math.min(onlinePvp.scanCameraIdx || 0, Math.max(0, (onlinePvp.scanCameraOptions || []).length - 1)));
+    select.value = String(idx);
+  }
+
+  function getSelectedCameraConstraints() {
+    const options = onlinePvp.scanCameraOptions || [];
+    if (!options.length) return { facingMode: { ideal: 'environment' } };
+    const idx = Math.max(0, Math.min(onlinePvp.scanCameraIdx || 0, options.length - 1));
+    const option = options[idx];
+    return option?.constraints || { facingMode: { ideal: 'environment' } };
   }
 
   async function startQrScanInto(textareaId) {
@@ -300,9 +337,12 @@
       box.innerHTML = `
         <video id="online-qr-video" autoplay playsinline style="width:100%; max-height:220px; border-radius:8px; border:1px solid rgba(255,255,255,.2); background:#000;"></video>
         <div id="online-qr-scan-status" style="font-size:.74rem; color:#9aa3c7;">Apunta al QR. Buscando...</div>
-        <div id="online-qr-camera-label" style="font-size:.72rem; color:#9aa3c7;">Camara: auto</div>
+        <div style="display:grid; grid-template-columns:1fr auto; gap:6px;">
+          <select id="online-qr-camera-select" style="background:#0f1631; color:#e8ecff; border:1px solid rgba(255,255,255,.2); border-radius:8px; padding:8px;"></select>
+          <button class="btn-action" onclick="onlinePvPApplyCameraSelection()">Aplicar</button>
+        </div>
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
-          <button class="btn-action" onclick="onlinePvPSwitchCamera()">Cambiar camara</button>
+          <button class="btn-action" onclick="onlinePvPSwitchCamera()">Siguiente camara</button>
           <button class="btn-action" onclick="onlinePvPStopScan()">Detener escaneo</button>
         </div>
       `;
@@ -311,19 +351,16 @@
 
     try {
       const devices = await getVideoInputDevices();
-      if (!onlinePvp.scanDeviceIds.length && devices.length) {
-        onlinePvp.scanDeviceIds = devices.map(d => d.deviceId);
-        onlinePvp.scanDeviceLabels = devices.map(d => d.label || '');
-        onlinePvp.scanDeviceIdx = chooseInitialCameraIndex(devices);
-      }
-      const selectedDeviceId = onlinePvp.scanDeviceIds[onlinePvp.scanDeviceIdx] || null;
-      const constraints = selectedDeviceId
-        ? { video: { deviceId: { exact: selectedDeviceId } }, audio: false }
-        : { video: { facingMode: { ideal: 'environment' } }, audio: false };
+      const prevKey = (onlinePvp.scanCameraOptions[onlinePvp.scanCameraIdx] || {}).key || null;
+      onlinePvp.scanCameraOptions = buildScanCameraOptions(devices);
+      let nextIdx = onlinePvp.scanCameraOptions.findIndex(o => o.key === prevKey);
+      if (nextIdx < 0) nextIdx = chooseInitialCameraOptionIndex(onlinePvp.scanCameraOptions);
+      onlinePvp.scanCameraIdx = Math.max(0, nextIdx);
+      refreshScanCameraSelector();
+      const constraints = { video: getSelectedCameraConstraints(), audio: false };
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       onlinePvp.scanStream = stream;
       onlinePvp.scanActive = true;
-      refreshScanCameraHint();
       const video = document.getElementById('online-qr-video');
       if (!video) return;
       video.srcObject = stream;
@@ -849,11 +886,21 @@
 
   window.onlinePvPSwitchCamera = function onlinePvPSwitchCamera() {
     if (!onlinePvp.scanTargetTextareaId) return;
-    if (!Array.isArray(onlinePvp.scanDeviceIds) || onlinePvp.scanDeviceIds.length <= 1) {
+    if (!Array.isArray(onlinePvp.scanCameraOptions) || onlinePvp.scanCameraOptions.length <= 1) {
       alert('No hay otra camara disponible.');
       return;
     }
-    onlinePvp.scanDeviceIdx = (onlinePvp.scanDeviceIdx + 1) % onlinePvp.scanDeviceIds.length;
+    onlinePvp.scanCameraIdx = (onlinePvp.scanCameraIdx + 1) % onlinePvp.scanCameraOptions.length;
+    startQrScanInto(onlinePvp.scanTargetTextareaId);
+  };
+
+  window.onlinePvPApplyCameraSelection = function onlinePvPApplyCameraSelection() {
+    if (!onlinePvp.scanTargetTextareaId) return;
+    const select = document.getElementById('online-qr-camera-select');
+    if (!select) return;
+    const idx = Number(select.value);
+    if (!Number.isFinite(idx)) return;
+    onlinePvp.scanCameraIdx = Math.max(0, Math.min(idx, Math.max(0, (onlinePvp.scanCameraOptions || []).length - 1)));
     startQrScanInto(onlinePvp.scanTargetTextareaId);
   };
 
