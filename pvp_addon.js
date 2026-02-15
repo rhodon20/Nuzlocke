@@ -635,6 +635,15 @@ function endPvPGame(p1Wins) {
 
     const winner = p1Wins ? 'JUGADOR 1' : 'JUGADOR 2';
     const color = p1Wins ? '#2196f3' : '#f44336';
+    const isOnline = pvpState.mode === 'online';
+    const onlineActions = isOnline ? `
+            <button onclick="onlinePvPRequestImmediateRematch()" style="margin-top:18px; padding:15px; width:100%; background:#00695c; color:white; border:none; border-radius:8px;">
+                Revancha inmediata
+            </button>
+            <button onclick="onlinePvPDisconnect()" style="margin-top:8px; padding:15px; width:100%; background:#37474f; color:white; border:none; border-radius:8px;">
+                Cerrar conexion online
+            </button>
+    ` : '';
 
     const container = document.getElementById('game-container');
     container.innerHTML = `
@@ -654,6 +663,7 @@ function endPvPGame(p1Wins) {
                 </div>
             </div>
 
+            ${onlineActions}
             <button onclick="location.reload()" style="margin-top:30px; padding:15px; width:100%; background:#333; color:white; border:none; border-radius:8px;">
                 Volver al Menú
             </button>

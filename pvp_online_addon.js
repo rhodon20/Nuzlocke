@@ -522,6 +522,29 @@
     onlinePvp.dc.send(JSON.stringify(msg));
   }
 
+  function setOnlinePostMatchIdle() {
+    onlinePvp.active = false;
+    onlinePvp.matchStarted = false;
+    onlinePvp.localMove = null;
+    onlinePvp.remoteMove = null;
+    onlinePvp.lastRoundVfx = null;
+    if (typeof pvpState !== 'undefined' && pvpState?.online) {
+      pvpState.online.awaitingLocalMove = false;
+      pvpState.online.statusText = 'Partida finalizada. Puedes pedir revancha.';
+    }
+  }
+
+  function startOnlineRandomMatch(modeLabel = 'ONLINE REVANCHA') {
+    const t1 = randomOnlineTeam();
+    const t2 = randomOnlineTeam();
+    startPvPMatch(t1, t2, modeLabel, { mode: 'online', onlineLocalSide: 1 });
+    pvpState.online.awaitingLocalMove = true;
+    pvpState.online.statusText = 'Elige tu movimiento.';
+    onlinePvp.matchStarted = true;
+    onlinePvp.active = true;
+    sendOnline({ type: 'INIT_MATCH', team1: JSON.parse(JSON.stringify(t1)), team2: JSON.parse(JSON.stringify(t2)) });
+  }
+
   function randomOnlineTeam() {
     if (typeof generateRandomTeam === 'function') return generateRandomTeam();
     return [];
@@ -771,8 +794,18 @@
 
     if (msg.type === 'MATCH_END') {
       const p1Wins = !!msg.p1Wins;
-      resetOnlineState();
+      setOnlinePostMatchIdle();
       if (typeof endPvPGame === 'function') endPvPGame(p1Wins);
+      return;
+    }
+
+    if (msg.type === 'REMATCH_REQUEST') {
+      if (onlinePvp.role === 'host' && onlinePvp.connected && !onlinePvp.active) {
+        log('Rival solicita revancha. Iniciando...');
+        startOnlineRandomMatch('ONLINE REVANCHA');
+      } else if (onlinePvp.role === 'guest') {
+        log('Revancha solicitada por host.');
+      }
       return;
     }
   }
@@ -787,14 +820,7 @@
         if (onlinePvp.matchMode === 'draft') {
           startOnlineDraft();
         } else {
-          const t1 = randomOnlineTeam();
-          const t2 = randomOnlineTeam();
-          startPvPMatch(t1, t2, 'ONLINE', { mode: 'online', onlineLocalSide: 1 });
-          pvpState.online.awaitingLocalMove = true;
-          pvpState.online.statusText = 'Elige tu movimiento.';
-          onlinePvp.matchStarted = true;
-          onlinePvp.active = true;
-          sendOnline({ type: 'INIT_MATCH', team1: JSON.parse(JSON.stringify(t1)), team2: JSON.parse(JSON.stringify(t2)) });
+          startOnlineRandomMatch('ONLINE');
         }
       }
       if (onlinePvp.matchMode !== 'draft' || onlinePvp.role !== 'host') {
@@ -1174,7 +1200,27 @@
   window.onOnlinePvPEnd = function onOnlinePvPEnd(p1Wins) {
     if (!onlinePvp.active || onlinePvp.role !== 'host') return;
     sendOnline({ type: 'MATCH_END', p1Wins: !!p1Wins });
+    setOnlinePostMatchIdle();
+  };
+
+  window.onlinePvPRequestImmediateRematch = function onlinePvPRequestImmediateRematch() {
+    if (!onlinePvp.connected || !onlinePvp.dc || onlinePvp.dc.readyState !== 'open') {
+      alert('No hay conexion activa para revancha.');
+      return;
+    }
+    if (onlinePvp.active || onlinePvp.matchStarted) return;
+
+    if (onlinePvp.role === 'host') {
+      startOnlineRandomMatch('ONLINE REVANCHA');
+      return;
+    }
+    sendOnline({ type: 'REMATCH_REQUEST' });
+    log('Solicitud de revancha enviada al host.');
+  };
+
+  window.onlinePvPDisconnect = function onlinePvPDisconnect() {
     resetOnlineState();
+    location.reload();
   };
 
   window.addEventListener('load', () => {
