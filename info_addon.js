@@ -230,19 +230,16 @@
         `;
     }
 
-    // 5. AUTO-UPDATE
-    const originalRenderAllInfo = window.renderAll;
-    window.renderAll = function() {
-        if (originalRenderAllInfo) originalRenderAllInfo();
-        if (isInfoOpen) updateInfoData();
-    };
-    
-    const originalRenderPvPInfo = window.renderPvP;
-    if (originalRenderPvPInfo) {
-        window.renderPvP = function() {
-            originalRenderPvPInfo();
-            if (isInfoOpen) updateInfoData();
-        };
+    // 5. AUTO-UPDATE VIA PLUGIN HOOK
+    if (typeof window.registerGamePlugin === 'function') {
+        window.registerGamePlugin({
+            name: 'info-overlay',
+            hooks: {
+                afterRender() {
+                    if (isInfoOpen) updateInfoData();
+                }
+            }
+        });
     }
 
 })();

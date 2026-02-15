@@ -1,145 +1,308 @@
-/* =========================================================
-   ADVANCED AI LOGIC
-   Description: IA mejorada que calcula daño y prioridades.
+﻿/* =========================================================
+   ADVANCED AI LOGIC (Plugin-based)
 ========================================================= */
 
-// Sobrescribimos la función doTurn original
-// NOTA: Esto solo afecta al modo 1 jugador. El PvP usa su propia lógica.
-const originalDoTurnAI = window.doTurn;
+(function initAdvancedAI() {
+    if (typeof window.registerGamePlugin !== 'function') return;
 
-window.doTurn = async function(moveKey) {
-    // Si estamos en medio de un turno o algo raro, salimos
-    if (window.turnLock) return;
-    
-    // Inyectamos nuestra lógica de selección para el oponente ANTES de llamar a la lógica de turno
-    // Pero como doTurn original calcula el movimiento dentro, tenemos que REEMPLAZAR doTurn completamente
-    // O... más inteligente: Modificamos el objeto 'opponent' temporalmente para que su "random move" sea el que queremos.
-    
-    // Al ser una función asíncrona compleja en index.html, lo mejor es copiar la estructura 
-    // y cambiar SOLO la línea de elección del rival.
-    
-    // ... Espera, para evitar copiar 100 líneas de código y desincronizar versiones:
-    // Vamos a "trucar" el Math.random solo para el turno del oponente o 
-    // forzar la elección del movimiento sobrescribiendo la propiedad 'moves' temporalmente es arriesgado.
-    
-    // MEJOR OPCIÓN: Reescribir doTurn simplificado invocando funciones auxiliares existentes.
-    // Para asegurar compatibilidad total, pegaré la versión mejorada de doTurn aquí.
-    
-    if(window.turnLock) return;
-    window.turnLock = true;
-  
-    const player = state.team[state.activeIdx];
-    const playerMove = MOVES[moveKey];
-  
-    // --- AI LOGIC START ---
-    let oppMoveKey = null;
-    if(opponent.moves.length > 0) {
-        oppMoveKey = getBestAIMove(opponent, player);
-    }
-    const oppMove = oppMoveKey ? MOVES[oppMoveKey] : null;
-    // --- AI LOGIC END ---
+    window.registerGamePlugin({
+        name: 'advanced-ai',
+        hooks: {
+            selectOpponentMove(ctx) {
+                const { value: defaultMove, opponent: aiMon, player: targetMon } = ctx;
+                if (!aiMon || !targetMon || !Array.isArray(aiMon.moves) || aiMon.moves.length === 0) {
+                    return defaultMove;
+                }
+                return getBestAIMove(aiMon, targetMon) || defaultMove;
+            }
+        }
+    });
+})();
 
-    // El resto es idéntico a la lógica original de index.html
-    const pSpeed = player.getStat('spe');
-    const oSpeed = opponent.getStat('spe');
-  
-    let first, second;
-    let moveFirst, moveSecond;
-    let isPlayerFirst;
-
-    const pPrio = (playerMove.nombre === 'Ataque Rápido' || playerMove.nombre === 'Velocidad Extrema') ? 1 : 0;
-    const oPrio = (oppMove && (oppMove.nombre === 'Ataque Rápido' || oppMove.nombre === 'Velocidad Extrema')) ? 1 : 0;
-
-    if (pPrio > oPrio) isPlayerFirst = true;
-    else if (oPrio > pPrio) isPlayerFirst = false;
-    else {
-        if (pSpeed >= oSpeed) isPlayerFirst = (pSpeed === oSpeed) ? Math.random() < 0.5 : true;
-        else isPlayerFirst = false;
-    }
-
-    if (isPlayerFirst) {
-        first = player; moveFirst = playerMove;
-        second = opponent; moveSecond = oppMove;
-    } else {
-        first = opponent; moveFirst = oppMove;
-        second = player; moveSecond = playerMove;
-    }
-
-    renderAll(); 
-
-    // ACTION 1
-    await executeMove(first, second, moveFirst, isPlayerFirst);
-    renderAll();
-
-    if (second.hp <= 0) {
-        await handleDeath(second, !isPlayerFirst);
-        return;
-    }
-
-    await wait(500);
-
-    // ACTION 2
-    await executeMove(second, first, moveSecond, !isPlayerFirst);
-    renderAll();
-
-    if (first.hp <= 0) {
-        await handleDeath(first, isPlayerFirst);
-        return;
-    }
-
-    await runStatusDamage(player, true);
-    if (player.hp > 0) await runStatusDamage(opponent, false);
-    renderAll();
-
-    if (player.hp <= 0) {
-        await handleDeath(player, true);
-    } else if (opponent.hp <= 0) {
-        await handleDeath(opponent, false);
-    } else {
-        window.turnLock = false;
-        renderAll();
-    }
-};
-
-// Función cerebro de la IA
 function getBestAIMove(aiMon, targetMon) {
-    let bestMove = aiMon.moves[0];
+    let bestMove = null;
     let bestScore = -9999;
+    let hasLikelyKO = false;
+
+    if (Array.isArray(aiMon.moves)) {
+        aiMon.moves.forEach(mKey => {
+            const m = MOVES[mKey];
+            if (!m || m.cat === 'Est' || m.poder <= 0) return;
+            if (typeof getMoveCooldown === 'function' && getMoveCooldown(aiMon, mKey) > 0) return;
+            const dmgSim = calcDamage(aiMon, targetMon, m);
+            const hitChance = (typeof getMoveHitChance === 'function') ? getMoveHitChance(aiMon, targetMon, m) : 1;
+            if (dmgSim.amount >= targetMon.hp && hitChance >= 0.7) hasLikelyKO = true;
+        });
+    }
 
     aiMon.moves.forEach(mKey => {
         const m = MOVES[mKey];
+        if (!m) return;
+        if (typeof getMoveCooldown === 'function' && getMoveCooldown(aiMon, mKey) > 0) return;
+
         let score = 0;
+        const isStatusMove = m.cat === 'Est' || m.poder === 0;
+        if (isStatusMove && (aiMon.tauntTurns || 0) > 0) {
+            score -= 200;
+        }
 
-        // 1. Simular daño
-        if (m.poder > 0 || m.nombre === 'Furia Dragón') {
-            // Usamos la función calcDamage existente (que ya incluye habilidades gracias a abilities.js)
+        if (!isStatusMove || m.nombre === 'Furia Dragon') {
             const dmgSim = calcDamage(aiMon, targetMon, m);
-            score += dmgSim.amount;
-
-            // Bonus si mata
-            if (dmgSim.amount >= targetMon.hp) score += 1000;
+            const hitChance = (typeof getMoveHitChance === 'function') ? getMoveHitChance(aiMon, targetMon, m) : 1;
+            const expectedDamage = dmgSim.amount * hitChance;
+            score += expectedDamage;
+            if (dmgSim.amount >= targetMon.hp) score += 1000 * hitChance;
         }
 
-        // 2. Lógica de Estado
-        if (m.effect) {
-            // No intentar dormir/paralizar/quemar si ya tiene estado
-            if (['SLP', 'PAR', 'BRN', 'PSN', 'FRZ'].includes(m.effect)) {
-                if (targetMon.status) score -= 50; // Ya tiene estado, mal movimiento
-                else score += 20; // Buen movimiento táctico
+        const effects = [];
+        if (Array.isArray(m.effects) && m.effects.length) {
+            m.effects.forEach(e => effects.push(e));
+        } else if (typeof m.effect === 'string' && m.effect.includes('|')) {
+            m.effect.split('|').map(e => e.trim()).filter(Boolean).forEach(e => effects.push(e));
+        } else if (m.effect) {
+            effects.push(m.effect);
+        }
+
+        effects.forEach(e => {
+            if (typeof e === 'string' && ['SLP', 'PAR', 'BRN', 'PSN', 'FRZ'].includes(e)) {
+                const canApply = (typeof canInflictStatus === 'function') ? canInflictStatus(targetMon, e) : !targetMon.status;
+                if (canApply) score += 20;
+                else score -= 40;
             }
-            
-            // Debuffs: No bajar stats si ya están al mínimo (simple check)
-            if (m.effect.includes('_DOWN')) score += 10;
+            if (typeof e === 'string' && e.includes('_DOWN')) score += 10;
+            if (typeof e === 'string' && e === 'CON') {
+                const canConfuse = (typeof canInflictConfusion === 'function') ? canInflictConfusion(targetMon) : (!targetMon.confusionTurns || targetMon.confusionTurns <= 0);
+                if (canConfuse) score += 16;
+                else score -= 20;
+            }
+            if (typeof e === 'string' && e === 'REFLECT') score += 14;
+            if (typeof e === 'string' && e === 'REFLECT') {
+                if (typeof getSideFieldState === 'function' && typeof isPlayerSideMon === 'function') {
+                    const aiIsPlayerSide = isPlayerSideMon(aiMon);
+                    const side = getSideFieldState(aiIsPlayerSide);
+                    if ((side?.reflectTurns || 0) > 0) score -= 20;
+                }
+            }
+            if (typeof e === 'string' && e === 'LIGHT_SCREEN') score += 14;
+            if (typeof e === 'string' && e === 'LIGHT_SCREEN') {
+                if (typeof getSideFieldState === 'function' && typeof isPlayerSideMon === 'function') {
+                    const aiIsPlayerSide = isPlayerSideMon(aiMon);
+                    const side = getSideFieldState(aiIsPlayerSide);
+                    if ((side?.lightScreenTurns || 0) > 0) score -= 20;
+                }
+            }
+            if (typeof e === 'string' && e === 'LEECH_SEED') {
+                const alreadySeeded = targetMon.leechSeedBySide === true || targetMon.leechSeedBySide === false;
+                if (targetMon.types?.includes('Planta') || alreadySeeded) score -= 20;
+                else score += 18;
+            }
+            if (typeof e === 'string' && e === 'SPIKES') {
+                if (typeof getSideFieldState === 'function' && typeof isPlayerSideMon === 'function') {
+                    const targetIsPlayerSide = isPlayerSideMon(targetMon);
+                    const targetSide = getSideFieldState(targetIsPlayerSide);
+                    const layers = targetSide?.spikesLayers || 0;
+                    if (layers >= 3) score -= 30;
+                    else score += (12 + layers * 6);
+                } else {
+                    score += 10;
+                }
+            }
+            if (typeof e === 'string' && e === 'STEALTH_ROCK') {
+                if (typeof getSideFieldState === 'function' && typeof isPlayerSideMon === 'function') {
+                    const targetIsPlayerSide = isPlayerSideMon(targetMon);
+                    const targetSide = getSideFieldState(targetIsPlayerSide);
+                    if (targetSide?.stealthRock) score -= 30;
+                    else score += 18;
+                } else {
+                    score += 12;
+                }
+            }
+            if (typeof e === 'string' && e === 'TOXIC_SPIKES') {
+                if (typeof getSideFieldState === 'function' && typeof isPlayerSideMon === 'function') {
+                    const targetIsPlayerSide = isPlayerSideMon(targetMon);
+                    const targetSide = getSideFieldState(targetIsPlayerSide);
+                    const layers = targetSide?.toxicSpikesLayers || 0;
+                    if (layers >= 2) score -= 30;
+                    else score += (14 + layers * 6);
+                } else {
+                    score += 12;
+                }
+            }
+            if (typeof e === 'string' && e === 'PERISH_SONG') {
+                const already = (aiMon.perishTurns || 0) > 0 || (targetMon.perishTurns || 0) > 0;
+                if (already) score -= 50;
+                else {
+                    const aiHpRate = aiMon.hp / Math.max(1, aiMon.maxHp);
+                    const targetHpRate = targetMon.hp / Math.max(1, targetMon.maxHp);
+                    if (targetHpRate > aiHpRate + 0.15) score += 20;
+                    else score -= 10;
+                }
+            }
+            if (typeof e === 'string' && e === 'TAUNT') {
+                const targetTaunted = (targetMon.tauntTurns || 0) > 0;
+                const statusMoveCount = Array.isArray(targetMon.moves)
+                    ? targetMon.moves.filter(k => MOVES[k] && MOVES[k].cat === 'Est').length
+                    : 0;
+                if (targetTaunted) score -= 25;
+                else score += 8 + (statusMoveCount * 4);
+                if (hasLikelyKO) score -= 18;
+            }
+            if (typeof e === 'string' && e === 'PROTECT') {
+                const hpRate = aiMon.hp / Math.max(1, aiMon.maxHp);
+                const streak = Math.max(0, aiMon.protectStreak || 0);
+                if (streak > 0) score -= (18 + streak * 10);
+                if (hpRate < 0.35) score += 24;
+                else if (hpRate < 0.55) score += 8;
+                else score -= 10;
+                if (hasLikelyKO) score -= 25;
+            }
+            if (typeof e === 'string' && e === 'CLEAR_OWN_HAZARDS') {
+                if (typeof getSideFieldState === 'function' && typeof isPlayerSideMon === 'function') {
+                    const aiIsPlayer = isPlayerSideMon(aiMon);
+                    const own = getSideFieldState(aiIsPlayer);
+                    const burden = (own?.spikesLayers || 0) + (own?.toxicSpikesLayers || 0) + ((own?.stealthRock) ? 1 : 0);
+                    if (burden > 0) score += 12 + burden * 8;
+                    else score -= 15;
+                }
+            }
+            if (typeof e === 'string' && e === 'DEFOG') {
+                if (typeof getSideFieldState === 'function' && typeof isPlayerSideMon === 'function') {
+                    const aiIsPlayer = isPlayerSideMon(aiMon);
+                    const own = getSideFieldState(aiIsPlayer);
+                    const foe = getSideFieldState(!aiIsPlayer);
+                    const ownBurden = (own?.spikesLayers || 0) + (own?.toxicSpikesLayers || 0) + ((own?.stealthRock) ? 1 : 0) +
+                        (((own?.reflectTurns || 0) > 0) ? 1 : 0) + (((own?.lightScreenTurns || 0) > 0) ? 1 : 0);
+                    const foeBurden = (foe?.spikesLayers || 0) + (foe?.toxicSpikesLayers || 0) + ((foe?.stealthRock) ? 1 : 0) +
+                        (((foe?.reflectTurns || 0) > 0) ? 1 : 0) + (((foe?.lightScreenTurns || 0) > 0) ? 1 : 0);
+                    score += (ownBurden * 7) - (foeBurden * 5);
+                    if (ownBurden === 0 && foeBurden === 0) score -= 20;
+                }
+            }
+            if (typeof e === 'string' && e === 'BATON_PASS') {
+                const aiIsPlayerSide = (typeof isPlayerSideMon === 'function') ? isPlayerSideMon(aiMon) : false;
+                let hasBench = false;
+                if (typeof pvpState !== 'undefined' && pvpState?.active) {
+                    const side = aiIsPlayerSide ? pvpState.p1 : pvpState.p2;
+                    hasBench = Array.isArray(side?.team) && side.team.some((p, idx) => idx !== side.activeIdx && p.hp > 0);
+                } else if (aiIsPlayerSide) {
+                    hasBench = Array.isArray(state?.team) && state.team.some((p, idx) => idx !== state.activeIdx && p.hp > 0);
+                }
+                if (!hasBench) score -= 60;
+                const boostStats = ['atk','def','spa','spd','spe','acc','eva']
+                    .reduce((sum, s) => sum + Math.max(0, Number(aiMon?.stages?.[s]) || 0), 0);
+                score += boostStats * 7;
+                if (boostStats === 0) score -= 15;
+            }
+            if (typeof e === 'string' && e === 'PIVOT_SWITCH') {
+                const aiIsPlayerSide = (typeof isPlayerSideMon === 'function') ? isPlayerSideMon(aiMon) : false;
+                let hasBench = false;
+                if (typeof pvpState !== 'undefined' && pvpState?.active) {
+                    const side = aiIsPlayerSide ? pvpState.p1 : pvpState.p2;
+                    hasBench = Array.isArray(side?.team) && side.team.some((p, idx) => idx !== side.activeIdx && p.hp > 0);
+                } else if (aiIsPlayerSide) {
+                    hasBench = Array.isArray(state?.team) && state.team.some((p, idx) => idx !== state.activeIdx && p.hp > 0);
+                }
+                if (!hasBench) score -= 40;
+                const hpRate = aiMon.hp / Math.max(1, aiMon.maxHp);
+                if (hpRate < 0.45) score += 12;
+                if (hasLikelyKO) score -= 8;
+            }
+            if (typeof e === 'string' && e === 'HAZE') {
+                const aiBoost = ['atk','def','spa','spd','spe','acc','eva']
+                    .reduce((sum, s) => sum + Math.max(0, Number(aiMon?.stages?.[s]) || 0), 0);
+                const foeBoost = ['atk','def','spa','spd','spe','acc','eva']
+                    .reduce((sum, s) => sum + Math.max(0, Number(targetMon?.stages?.[s]) || 0), 0);
+                score += (foeBoost * 10) - (aiBoost * 8);
+                if (foeBoost === 0 && aiBoost === 0) score -= 20;
+            }
+            if (typeof e === 'string' && e === 'HEAL_BLOCK') {
+                const alreadyBlocked = (targetMon.healBlockTurns || 0) > 0;
+                if (alreadyBlocked) {
+                    score -= 25;
+                } else {
+                    const targetHpRate = targetMon.hp / Math.max(1, targetMon.maxHp);
+                    const hasHealMoves = Array.isArray(targetMon.moves) && targetMon.moves.some(k => {
+                        const mv = MOVES[k];
+                        if (!mv) return false;
+                        if (mv.effect === 'HEAL_50' || mv.effect === 'REST') return true;
+                        if (Array.isArray(mv.effects)) {
+                            return mv.effects.some(obj => obj && obj.type === 'heal');
+                        }
+                        return false;
+                    });
+                    if (hasHealMoves) score += 16;
+                    if (targetHpRate <= 0.55) score += 12;
+                }
+            }
+            if (typeof e === 'string' && e === 'DISABLE') {
+                const already = (targetMon.disableTurns || 0) > 0;
+                const moveKey = targetMon.lastUsedMoveKey;
+                if (already) {
+                    score -= 25;
+                } else if (!moveKey || !MOVES[moveKey]) {
+                    score -= 18;
+                } else {
+                    const targetMove = MOVES[moveKey];
+                    const basePower = Number(targetMove.poder) || 0;
+                    if (targetMove.cat !== 'Est' && basePower > 0) score += 10 + Math.min(24, Math.floor(basePower / 5));
+                    else score += 8;
+                }
+            }
+            if (typeof e === 'string' && ['RAIN', 'SUN', 'SAND', 'HAIL'].includes(e)) {
+                let currentWeather = null;
+                if (typeof getWeather === 'function') currentWeather = getWeather()?.type || null;
+                if (currentWeather === e) {
+                    score -= 25;
+                } else {
+                    if (e === 'RAIN' && aiMon.types?.includes('Agua')) score += 18;
+                    else if (e === 'SUN' && aiMon.types?.includes('Fuego')) score += 18;
+                    else if (e === 'SAND' && (aiMon.types?.includes('Roca') || aiMon.types?.includes('Tierra') || aiMon.types?.includes('Acero'))) score += 14;
+                    else if (e === 'HAIL' && aiMon.types?.includes('Hielo')) score += 14;
+                    else score += 8;
+                }
+            }
+            if (typeof e === 'string' && e === 'HEAL_50') {
+                const hpRate = aiMon.hp / Math.max(1, aiMon.maxHp);
+                if (hpRate < 0.4) score += 60;
+                else if (hpRate < 0.65) score += 20;
+                else score -= 25;
+            }
+            if (typeof e === 'string' && e === 'REST') {
+                const hpRate = aiMon.hp / Math.max(1, aiMon.maxHp);
+                if (!aiMon.status && hpRate > 0.75) score -= 50;
+                else score += 35;
+            }
+            if (typeof e === 'object' && e.type === 'stat' && Number.isFinite(Number(e.change))) {
+                if (e.target === 'self' && Number(e.change) > 0) score += 10 * Number(e.change);
+                if (e.target !== 'self' && Number(e.change) < 0) score += 10 * Math.abs(Number(e.change));
+            }
+        });
+
+        // Prefer finishing blow over support when a reliable KO is available.
+        if (hasLikelyKO && isStatusMove) score -= 120;
+
+        // Prefer setup when both mons are healthy and no immediate KO is expected.
+        if (!hasLikelyKO && isStatusMove) {
+            const aiHpRate = aiMon.hp / Math.max(1, aiMon.maxHp);
+            const targetHpRate = targetMon.hp / Math.max(1, targetMon.maxHp);
+            if (aiHpRate > 0.65 && targetHpRate > 0.55) score += 8;
         }
 
-        // 3. Aleatoriedad para no ser 100% predecible
-        score += Math.random() * 5;
+        if (isStatusMove && effects.length === 0) score -= 20;
 
+        score += gameRandom() * 5;
         if (score > bestScore) {
             bestScore = score;
             bestMove = mKey;
         }
     });
 
-    return bestMove;
+    if (bestMove) return bestMove;
+    if (typeof getUsableMoveKeys === 'function') {
+        const usable = getUsableMoveKeys(aiMon);
+        if (usable.length > 0) return usable[0];
+    }
+    return aiMon.moves[0] || null;
 }
+
+

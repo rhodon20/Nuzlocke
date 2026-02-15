@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
-  <title>Pokemon Rogue - Kanto Edition</title>
+  <title>Pokémon Rogue - Kanto Edition</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
   <style>
     :root{
@@ -315,8 +315,109 @@
       gap: 10px;
       margin-top: 5px;
     }
+    #seed-controls {
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 6px;
+      margin-top: 4px;
+    }
+    #seed-input {
+      background: #0f1631;
+      color: #e8ecff;
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 6px;
+      padding: 10px;
+      font-weight: 700;
+    }
+    #btn-seed-random {
+      background: #455a64;
+      color: #fff;
+      border: 1px solid rgba(255,255,255,0.15);
+    }
+    #btn-seed-copy {
+      background: #37474f;
+      color: #fff;
+      border: 1px solid rgba(255,255,255,0.15);
+    }
+    #seed-lock-indicator {
+      margin-top: 4px;
+      font-size: 0.72rem;
+      color: var(--ui-muted);
+      text-align: right;
+    }
     #btn-normal { background: linear-gradient(135deg, var(--ui-accent-2), var(--ui-warning)); color: #000; padding: 14px; font-size:1.1rem; border:none; }
     #btn-nuzlocke { background: linear-gradient(135deg, #7b1fa2, #4a148c); color: #fff; padding: 14px; font-size:1.1rem; border:none; }
+    #btn-daily { background: linear-gradient(135deg, #00897b, #00695c); color: #fff; padding: 14px; font-size:1.1rem; border:none; }
+    #run-history {
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid rgba(0, 198, 215, 0.25);
+      border-radius: 10px;
+      padding: 8px;
+    }
+    #run-history h3 {
+      margin: 0 0 6px 0;
+      font-size: 0.85rem;
+      color: var(--ui-accent-2);
+    }
+    #run-history-list {
+      display: grid;
+      gap: 4px;
+      max-height: 140px;
+      overflow-y: auto;
+      font-size: 0.75rem;
+    }
+    .run-row {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 6px;
+      align-items: center;
+      background: rgba(255,255,255,0.04);
+      border-radius: 6px;
+      padding: 4px 6px;
+      cursor: pointer;
+      transition: background 0.15s ease, outline-color 0.15s ease;
+      outline: 1px solid transparent;
+    }
+    .run-row:hover { background: rgba(255,255,255,0.08); outline-color: rgba(0, 198, 215, 0.35); }
+    .run-row-empty { cursor: default; }
+    .run-row-empty:hover { background: rgba(255,255,255,0.04); outline-color: transparent; }
+    .run-result-loss { color: #ff8a80; font-weight: 700; }
+    .run-seed { color: var(--ui-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #run-detail-body {
+      flex: 1;
+      overflow-y: auto;
+      background: rgba(0,0,0,0.35);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 8px;
+      padding: 10px;
+      font-size: 0.85rem;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      margin-bottom: 10px;
+    }
+    #replay-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(11, 16, 32, 0.96);
+      z-index: 1200;
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+      padding: 12px;
+      box-sizing: border-box;
+    }
+    #replay-header { font-size: 0.85rem; color: #ffd54a; }
+    #replay-event-box {
+      flex: 1;
+      background: rgba(0,0,0,0.35);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 8px;
+      padding: 8px;
+      overflow-y: auto;
+      font-size: 0.8rem;
+      white-space: pre-wrap;
+    }
+    #replay-controls { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 6px; }
 
     #team-bar {
       display: flex;
@@ -375,7 +476,7 @@
 
   <div id="game-container">
     <div id="mode-display" class="mode-badge"></div>
-    <h1 id="game-title">⚔️ PokeRogue Kanto 💥</h1>
+    <h1 id="game-title">PokeRogue Kanto</h1>
 
     <div id="battle-scene" class="bg-forest">
       <div id="vfx-layer" style="position:absolute; inset:0; pointer-events:none; z-index:40;"></div>
@@ -396,10 +497,10 @@
     </div>
 
     <div id="team-bar">
-      <span>🏅 x<b id="badges-val">0</b></span>
-      <span>🎱 x<b id="balls-val">0</b></span>
-      <span>💊 x<b id="pots-val">0</b></span>
-      <span>🏆 Racha: <b id="streak-val">0</b></span>
+      <span>Medallas x<b id="badges-val">0</b></span>
+      <span>Pokeballs x<b id="balls-val">0</b></span>
+      <span>Pociones x<b id="pots-val">0</b></span>
+      <span>Racha: <b id="streak-val">0</b></span>
     </div>
 
     <div id="combat-log">Bienvenido a Kanto Rogue.</div>
@@ -414,14 +515,27 @@
       </div>
 
       <div class="grid-2">
-        <button class="btn-action" onclick="saveGame()">💾 Guardar</button>
-        <button class="btn-action" onclick="loadGame()" id="btn-load" disabled>📂 Cargar</button>
+        <button class="btn-action" onclick="saveGame()">Guardar</button>
+        <button class="btn-action" onclick="loadGame()" id="btn-load" disabled>Cargar</button>
       </div>
+      <button class="btn-action" onclick="exportRunLog()" id="btn-export-log">Exportar Run Log</button>
+      <button class="btn-action" onclick="importReplayFile()" id="btn-import-replay">Importar Replay</button>
     </div>
 
     <div id="start-buttons">
+      <div id="seed-controls">
+        <input id="seed-input" type="text" placeholder="Seed de run (opcional)" maxlength="40">
+        <button id="btn-seed-random" onclick="randomizeSeed()">Aleatoria</button>
+        <button id="btn-seed-copy" onclick="copyRunSeed()">Copiar</button>
+      </div>
+      <div id="seed-lock-indicator"></div>
       <button id="btn-normal" onclick="startGame('normal')">Modo Normal</button>
-      <button id="btn-nuzlocke" onclick="startGame('nuzlocke')">☠️ Modo Nuzlocke</button>
+      <button id="btn-nuzlocke" onclick="startGame('nuzlocke')">Modo Nuzlocke</button>
+      <button id="btn-daily" onclick="startDailyChallenge()">Desafío Diario</button>
+      <div id="run-history">
+        <h3>Últimas Runs</h3>
+        <div id="run-history-list"></div>
+      </div>
     </div>
 
     <div id="switch-overlay" class="modal-overlay">
@@ -443,6 +557,23 @@
       <div id="party-full-list" class="modal-list"></div>
       <button class="btn-action btn-capture" id="btn-release-new">Liberar al Nuevo</button>
     </div>
+
+    <div id="replay-overlay">
+      <div id="replay-header"></div>
+      <div id="replay-event-box"></div>
+      <div id="replay-controls">
+        <button class="btn-action" onclick="replayPrev()">Anterior</button>
+        <button class="btn-action" onclick="replayNext()">Siguiente</button>
+        <button class="btn-action" onclick="replayTogglePlay()" id="btn-replay-play">Play</button>
+        <button class="btn-action" onclick="closeReplayViewer()">Cerrar</button>
+      </div>
+    </div>
+    <div id="run-detail-overlay" class="modal-overlay">
+      <h3 class="modal-title">Detalle de Run</h3>
+      <div id="run-detail-body"></div>
+      <button class="btn-action" onclick="closeRunDetails()">Cerrar</button>
+    </div>
+    <input type="file" id="replay-file-input" accept=".json,application/json" style="display:none">
   </div>
 
 <script>
@@ -468,24 +599,43 @@ const SLUG_MAP = {
 <script src="pok_catalog.js"></script>
 <script src="evolutions.js"></script>
 <script src="types.js"></script>
-<script src="pvp_addon.js"></script>
-<script src="ia_logic.js"></script>
-<script src="abilities.js"></script>
-<script src="info_addon.js"></script>
 <script>
 /* =========================================================
    GAME STATE
 ========================================================= */
+const SAVE_KEY = 'poke_save';
+const SAVE_VERSION = 2;
+const RUN_HISTORY_KEY = 'poke_run_history';
+const RUN_HISTORY_LIMIT = 20;
+
 let state = {
   team: [],
-  inventory: { balls: 0, potions: 0 },
+  inventory: { balls: 0, pots: 0 },
   streak: 0,
   badges: 0,
   activeIdx: 0,
-  gameMode: 'normal' // 'normal' or 'nuzlocke'
+  gameMode: 'normal', // 'normal' | 'nuzlocke' | 'daily' | 'roguerun'
+  runSeed: '',
+  rngState: 0,
+  runStartedAt: 0,
+  dailyChallenge: null,
+  rogueRun: null,
+  runLog: null
 };
 let opponent = null;
+let battleField = {
+  player: { reflectTurns: 0, lightScreenTurns: 0, spikesLayers: 0, toxicSpikesLayers: 0, stealthRock: false },
+  opponent: { reflectTurns: 0, lightScreenTurns: 0, spikesLayers: 0, toxicSpikesLayers: 0, stealthRock: false },
+  weather: { type: null, turns: 0 },
+  runEvent: null
+};
 let turnLock = false;
+Object.defineProperty(window, 'turnLock', {
+  get: () => turnLock,
+  set: (value) => { turnLock = !!value; }
+});
+
+const spriteApiCache = new Map();
 
 /* =========================================================
    CLASSES
@@ -498,8 +648,23 @@ class Pokemon {
     this.types = data.type;
     this.xp = 0;
     this.xpToNext = level * 60 + 100;
-    this.isShiny = Math.random() < CONSTANTS.SHINY_CHANCE;
+    this.isShiny = gameRandom() < CONSTANTS.SHINY_CHANCE;
     this.status = null;
+    this.sleepTurns = 0;
+    this.freezeTurns = 0;
+    this.flinched = false;
+    this.confusionTurns = 0;
+    this.statusShieldTurns = 0;
+    this.confusionShieldTurns = 0;
+    this.healBlockTurns = 0;
+    this.disableTurns = 0;
+    this.disabledMoveKey = null;
+    this.lastUsedMoveKey = null;
+    this.leechSeedBySide = null;
+    this.perishTurns = 0;
+    this.comboStacks = 0;
+    this.lastMoveType = null;
+    this.moveCooldowns = {};
     
     this.bonusMultiplier = 1.0;
     this.baseStats = {
@@ -507,7 +672,7 @@ class Pokemon {
       spa: data.sp_atk, spd: data.sp_def, spe: data.speed
     };
     
-    this.stages = { atk:0, def:0, spa:0, spd:0, spe:0 };
+    this.stages = { atk:0, def:0, spa:0, spd:0, spe:0, acc:0, eva:0 };
 
     this.recalcStats();
     this.hp = this.maxHp;
@@ -517,7 +682,7 @@ class Pokemon {
       this.moves = [];
       const numMoves = Math.min(4, Math.max(1, Math.floor(level / 5)));
       for(let i=0; i<numMoves; i++) {
-        const rnd = allMoves[Math.floor(Math.random() * allMoves.length)];
+        const rnd = allMoves[Math.floor(gameRandom() * allMoves.length)];
         if(!this.moves.includes(rnd)) this.moves.push(rnd);
       }
     } else {
@@ -539,16 +704,32 @@ class Pokemon {
   getStat(statName) {
     let base = this[statName]; 
     let stage = this.stages[statName] || 0;
-    let multiplier = 1.0;
-    if (stage >= 0) multiplier = (2 + stage) / 2;
-    else multiplier = 2 / (2 + Math.abs(stage));
+    let multiplier = getStageMultiplier(stage);
     let finalVal = Math.floor(base * multiplier);
     if (statName === 'spe' && this.status === 'PAR') finalVal = Math.floor(finalVal * 0.5);
     return Math.max(1, finalVal);
   }
 
   resetStages() {
-    this.stages = { atk:0, def:0, spa:0, spd:0, spe:0 };
+    this.stages = { atk:0, def:0, spa:0, spd:0, spe:0, acc:0, eva:0 };
+    this.sleepTurns = 0;
+    this.freezeTurns = 0;
+    this.flinched = false;
+    this.confusionTurns = 0;
+    this.statusShieldTurns = 0;
+    this.confusionShieldTurns = 0;
+    this.healBlockTurns = 0;
+    this.disableTurns = 0;
+    this.disabledMoveKey = null;
+    this.lastUsedMoveKey = null;
+    this.tauntTurns = 0;
+    this.protectThisTurn = false;
+    this.protectStreak = 0;
+    this.pendingSwitch = null;
+    this.leechSeedBySide = null;
+    this.perishTurns = 0;
+    this.comboStacks = 0;
+    this.lastMoveType = null;
   }
 }
 
@@ -558,1090 +739,500 @@ class Pokemon {
 const $ = id => document.getElementById(id);
 const wait = ms => new Promise(r => setTimeout(r, ms));
 
-function log(msg) {
-  const div = document.createElement('div');
-  div.innerHTML = msg;
-  div.style.marginBottom = '4px';
-  div.style.opacity = 0; // Anime in
-  $('combat-log').prepend(div);
-  anime({ targets: div, opacity: 1, translateX: [-10, 0], duration: 400 });
-  if ($('combat-log').children.length > 20) $('combat-log').lastChild.remove();
+
+function isSeedLockedMode() {
+  const startButtons = $('start-buttons');
+  const inBattleView = !!startButtons && startButtons.style.display === 'none';
+  return inBattleView && state.gameMode === 'daily' && !!state.dailyChallenge?.active;
 }
 
-function getEffectIcon(type) {
-  const icons = {
-    'Fuego': '🔥', 'Agua': '💧', 'Planta': '🍃', 'Eléctrico': '⚡', 
-    'Roca': '🪨', 'Tierra': '🏜️', 'Volador': '🌪️', 'Psíquico': '🔮',
-    'Fantasma': '👻', 'Hielo': '❄️', 'Veneno': '☠️', 'Lucha': '🥊',
-    'Bicho': '🦟', 'Dragón': '🐉', 'Normal': '💥'
-  };
-  return icons[type] || '💥';
+function getCurrentSeedValue() {
+  if (state.runSeed) return state.runSeed;
+  const input = $('seed-input');
+  return normalizeSeed(input ? input.value : '');
 }
 
-function getProjectileClass(type) {
-  const map = {
-    'Fuego': 'proj-fire', 'Agua': 'proj-water', 'Planta': 'proj-grass', 
-    'Eléctrico': 'proj-electric', 'Roca': 'proj-rock', 'Fantasma': 'proj-ghost'
-  };
-  return map[type] || 'proj-normal';
+async function copyRunSeed() {
+  const seed = getCurrentSeedValue();
+  if (!seed) {
+    alert('No hay seed para copiar.');
+    return;
+  }
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(seed);
+      log(`Seed copiada: <b>${seed}</b>`);
+      return;
+    }
+  } catch {}
+  window.prompt('Copia la seed:', seed);
 }
 
-function shootProjectile(type, fromId, toId) {
-  const fromEl = $(fromId);
-  const toEl = $(toId);
-  const layer = $('vfx-layer');
-  if (!fromEl || !toEl) return Promise.resolve();
-
-  const r1 = fromEl.getBoundingClientRect();
-  const r2 = toEl.getBoundingClientRect();
-  const parent = layer.getBoundingClientRect();
-
-  const startX = r1.left - parent.left + r1.width/2;
-  const startY = r1.top - parent.top + r1.height/2;
-  const endX = r2.left - parent.left + r2.width/2;
-  const endY = r2.top - parent.top + r2.height/2;
-
-  const p = document.createElement('div');
-  p.className = `projectile ${getProjectileClass(type)}`;
-  // Set initial position centered
-  p.style.left = (startX - 16) + 'px';
-  p.style.top = (startY - 16) + 'px';
-  layer.appendChild(p);
-
-  return anime({
-    targets: p,
-    left: (endX - 16) + 'px',
-    top: (endY - 16) + 'px',
-    opacity: [0, 1, 1],
-    rotate: '1turn',
-    scale: [0.5, 1.2, 1],
-    easing: 'easeInQuad',
-    duration: 400,
-    complete: () => p.remove()
-  }).finished;
-}
-
-function spawnParticles(type, targetEl) {
-  const rect = targetEl.getBoundingClientRect();
-  const parent = $('vfx-layer').getBoundingClientRect();
-  const centerX = rect.left - parent.left + rect.width / 2;
-  const centerY = rect.top - parent.top + rect.height / 2;
-  const icon = getEffectIcon(type);
-
-  for(let i=0; i<8; i++) { // More particles
-    const p = document.createElement('div');
-    p.classList.add('vfx-particle');
-    p.textContent = icon;
-    p.style.left = centerX + 'px';
-    p.style.top = centerY + 'px';
-    $('vfx-layer').appendChild(p);
-
-    anime({
-      targets: p,
-      translateX: () => anime.random(-60, 60),
-      translateY: () => anime.random(-60, 60),
-      scale: [0, 1.5, 0], // Grow then shrink
-      rotate: () => anime.random(-360, 360),
-      opacity: [1, 0],
-      duration: () => anime.random(600, 1000),
-      easing: 'easeOutExpo',
-      complete: () => p.remove()
-    });
+function refreshSeedUiState() {
+  const input = $('seed-input');
+  const randomBtn = $('btn-seed-random');
+  const lockInfo = $('seed-lock-indicator');
+  const locked = isSeedLockedMode();
+  if (input) input.disabled = locked;
+  if (randomBtn) randomBtn.disabled = locked;
+  if (lockInfo) {
+    lockInfo.innerText = locked
+      ? 'Seed bloqueada por Desafío Diario.'
+      : 'Seed editable para runs normales y nuzlocke.';
   }
 }
 
-function animateAttack(attackerSlotId, type) {
-  const el = $(attackerSlotId);
-  const img = el.querySelector('img');
-  if(!img) return Promise.resolve();
-  
-  // Player moves right (positive), Opponent moves left (negative)
-  const dir = attackerSlotId.includes('player') ? 1 : -1;
-  
-  // Remove idle anim during attack
-  el.classList.remove('anim-idle');
-
-  return anime.timeline({
-    targets: img,
-    easing: 'easeOutQuad'
-  })
-  .add({
-    translateX: -10 * dir, // Anticipation
-    scaleX: 0.9, 
-    scaleY: 1.1,
-    duration: 150
-  })
-  .add({
-    translateX: 50 * dir, // Lunge
-    scaleX: 1.2, 
-    scaleY: 0.8,
-    duration: 100
-  })
-  .add({
-    translateX: 0, // Return
-    scaleX: 1,
-    scaleY: 1,
-    duration: 400,
-    easing: 'easeOutElastic(1, .5)'
-  })
-  .finished.then(() => el.classList.add('anim-idle'));
+function getTodayDateKey() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
 }
 
-function animateDamage(victimSlotId) {
-  const el = $(victimSlotId);
-  const img = el.querySelector('img');
-  if(!img) return Promise.resolve();
+function makeDeterministicPicker(seedText) {
+  let x = hashSeedToUint32(seedText) || 0x9e3779b9;
+  return () => {
+    x ^= x << 13;
+    x ^= x >>> 17;
+    x ^= x << 5;
+    return ((x >>> 0) / 4294967296);
+  };
+}
 
-  // Shake container
-  const shake = anime({
-    targets: el,
-    translateX: [
-      { value: -5, duration: 50 },
-      { value: 5, duration: 50 },
-      { value: -5, duration: 50 },
-      { value: 5, duration: 50 },
-      { value: 0, duration: 50 }
-    ],
-    easing: 'linear'
+function buildDailyChallenge(dateKey) {
+  const seed = `daily-${dateKey}`;
+  const pick = makeDeterministicPicker(seed);
+  const pool = ['NO_POTION', 'NO_CAPTURE', 'ENEMY_LEVEL'];
+  const modifiers = [];
+
+  while (modifiers.length < 2) {
+    const idx = Math.floor(pick() * pool.length);
+    const key = pool[idx];
+    if (!modifiers.includes(key)) modifiers.push(key);
+  }
+
+  const enemyLevelBonus = modifiers.includes('ENEMY_LEVEL') ? (2 + Math.floor(pick() * 3)) : 0;
+  const labels = modifiers.map(key => {
+    if (key === 'NO_POTION') return 'Sin Pociones';
+    if (key === 'NO_CAPTURE') return 'Sin Capturas';
+    return `Rival +${enemyLevelBonus} niveles`;
   });
 
-  // Flash Effect
-  const flash = anime({
-    targets: img,
-    filter: [
-      { value: 'brightness(3) sepia(1) hue-rotate(-50deg)', duration: 100 },
-      { value: 'brightness(1) sepia(0) hue-rotate(0deg)', duration: 200 }
-    ],
-    opacity: [1, 0.4, 1],
-    easing: 'linear'
+  return {
+    active: true,
+    dateKey,
+    seed,
+    modifiers,
+    enemyLevelBonus,
+    labels
+  };
+}
+
+function isDailyActive() {
+  return state.gameMode === 'daily' && state.dailyChallenge && state.dailyChallenge.active;
+}
+
+function hasDailyModifier(key) {
+  return !!(isDailyActive() && Array.isArray(state.dailyChallenge.modifiers) && state.dailyChallenge.modifiers.includes(key));
+}
+
+function startDailyChallenge() {
+  const challenge = buildDailyChallenge(getTodayDateKey());
+  state.dailyChallenge = challenge;
+  const seedInput = $('seed-input');
+  if (seedInput) seedInput.value = challenge.seed;
+  startGame('daily');
+}
+
+window.startDailyChallenge = startDailyChallenge;
+
+let currentRunRecorded = false;
+const REPLAY_CHECKPOINT_INTERVAL = 10;
+
+function getRunHistory() {
+  const raw = localStorage.getItem(RUN_HISTORY_KEY);
+  if (!raw) return [];
+  try {
+    const data = JSON.parse(raw);
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveRunHistory(history) {
+  localStorage.setItem(RUN_HISTORY_KEY, JSON.stringify(history.slice(0, RUN_HISTORY_LIMIT)));
+}
+
+function formatDuration(totalMs) {
+  const s = Math.max(0, Math.floor((totalMs || 0) / 1000));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${sec}s`;
+  return `${sec}s`;
+}
+
+function renderRunHistory() {
+  const listEl = $('run-history-list');
+  if (!listEl) return;
+  const history = getRunHistory();
+  if (!history.length) {
+    listEl.innerHTML = '<div class="run-row run-row-empty"><span class="run-seed">Sin runs registradas todavía.</span></div>';
+    return;
+  }
+
+  listEl.innerHTML = history.slice(0, 8).map((run, idx) => {
+    const resultClass = run.result === 'DERROTA' ? 'run-result-loss' : '';
+    const left = `<span class="${resultClass}">${run.result}</span>`;
+    const seed = `<span class="run-seed" title="${run.seed}">${run.seed}</span>`;
+    const modeTag = run.mode === 'daily' ? 'Diario' : (run.mode || 'normal');
+    const right = `<span>${modeTag} | Racha ${run.streak} | ${run.duration}</span>`;
+    return `<div class="run-row" onclick="openRunDetails(${idx})" title="Ver detalle">${left}${seed}${right}</div>`;
+  }).join('');
+}
+
+function formatRunEndedAt(endedAtIso) {
+  if (!endedAtIso) return 'N/D';
+  const dt = new Date(endedAtIso);
+  if (Number.isNaN(dt.getTime())) return 'N/D';
+  return dt.toLocaleString();
+}
+
+function openRunDetails(index) {
+  const history = getRunHistory();
+  if (!Array.isArray(history) || index < 0 || index >= history.length) return;
+  const run = history[index];
+  const modeTag = run.mode === 'daily' ? 'Diario' : (run.mode || 'normal');
+  const endedAt = formatRunEndedAt(run.endedAt);
+  const lines = [
+    `Resultado: ${run.result || 'N/D'}`,
+    `Modo: ${modeTag}`,
+    `Seed: ${run.seed || 'sin-seed'}`,
+    `Finalizada: ${endedAt}`,
+    `Duración: ${run.duration || 'N/D'}`,
+    `Racha: ${Number.isFinite(run.streak) ? run.streak : 0}`,
+    `Medallas: ${Number.isFinite(run.badges) ? run.badges : 0}`,
+    `Equipo: ${Number.isFinite(run.teamSize) ? run.teamSize : 0}`,
+    `Vivos al final: ${Number.isFinite(run.alive) ? run.alive : 0}`,
+    `Nivel máximo: ${Number.isFinite(run.maxLevel) ? run.maxLevel : 0}`
+  ];
+  const body = $('run-detail-body');
+  if (body) body.innerText = lines.join('\n');
+  const overlay = $('run-detail-overlay');
+  if (overlay) overlay.style.display = 'flex';
+}
+
+function closeRunDetails() {
+  const overlay = $('run-detail-overlay');
+  if (overlay) overlay.style.display = 'none';
+}
+
+function startRunTracking() {
+  state.runStartedAt = Date.now();
+  currentRunRecorded = false;
+  initRunLog();
+  recordRunEvent('run_start', {
+    mode: state.gameMode,
+    seed: state.runSeed,
+    daily: state.dailyChallenge || null
   });
-
-  return Promise.all([shake.finished, flash.finished]);
 }
 
-function getTierFromLevel(level) {
-  if (level <= 15) return 1;
-  if (level <= 30) return 2;
-  if (level <= 45) return 3;
-  if (level <= 60) return 4;
-  return 5;
+function recordRunResult(resultLabel) {
+  if (currentRunRecorded) return;
+  currentRunRecorded = true;
+  const endedAt = Date.now();
+  const startedAt = Number.isFinite(state.runStartedAt) && state.runStartedAt > 0 ? state.runStartedAt : endedAt;
+  const durationMs = Math.max(0, endedAt - startedAt);
+  const maxLevel = state.team.reduce((max, p) => Math.max(max, p.level || 0), 0);
+  const aliveCount = state.team.filter(p => p.hp > 0).length;
+  const entry = {
+    endedAt: new Date(endedAt).toISOString(),
+    result: resultLabel,
+    mode: state.gameMode || 'normal',
+    seed: state.runSeed || 'sin-seed',
+    streak: state.streak || 0,
+    badges: state.badges || 0,
+    teamSize: state.team.length || 0,
+    alive: aliveCount,
+    maxLevel,
+    duration: formatDuration(durationMs)
+  };
+  const history = getRunHistory();
+  history.unshift(entry);
+  saveRunHistory(history);
+  renderRunHistory();
+  if (state.runLog) {
+    state.runLog.result = resultLabel;
+    state.runLog.endedAt = new Date(endedAt).toISOString();
+  }
 }
+
+function initRunLog() {
+  state.runLog = {
+    schemaVersion: 2,
+    startedAt: new Date().toISOString(),
+    mode: state.gameMode || 'normal',
+    seed: state.runSeed || '',
+    initialRngState: Number.isFinite(state.rngState) ? (state.rngState >>> 0) : 0,
+    dailyChallenge: state.dailyChallenge || null,
+    events: [],
+    replay: {
+      seed: state.runSeed || '',
+      initialRngState: Number.isFinite(state.rngState) ? (state.rngState >>> 0) : 0,
+      actionSequence: [],
+      rngCheckpoints: []
+    }
+  };
+}
+
+function appendReplayCheckpoint(trigger, tMs) {
+  const replay = state.runLog?.replay;
+  if (!replay) return;
+  replay.rngCheckpoints.push({
+    idx: replay.rngCheckpoints.length,
+    trigger,
+    tMs,
+    eventCount: Array.isArray(state.runLog?.events) ? state.runLog.events.length : 0,
+    rngState: Number.isFinite(state.rngState) ? (state.rngState >>> 0) : 0
+  });
+}
+
+function maybeCheckpointFromEvent(type, tMs) {
+  const replay = state.runLog?.replay;
+  if (!replay) return;
+  const keyTypes = new Set([
+    'run_start', 'encounter_start', 'turn_choice', 'switch',
+    'use_potion', 'capture_attempt', 'battle_win', 'battle_loss'
+  ]);
+  const eventCount = Array.isArray(state.runLog?.events) ? state.runLog.events.length : 0;
+  const byInterval = eventCount > 0 && (eventCount % REPLAY_CHECKPOINT_INTERVAL === 0);
+  if (keyTypes.has(type) || byInterval) {
+    appendReplayCheckpoint(type, tMs);
+  }
+}
+
+function recordReplayAction(actionType, data = {}) {
+  const replay = state.runLog?.replay;
+  if (!replay || !actionType) return;
+  const nowMs = Date.now();
+  const baseMs = Number.isFinite(state.runStartedAt) && state.runStartedAt > 0 ? state.runStartedAt : nowMs;
+  replay.actionSequence.push({
+    idx: replay.actionSequence.length,
+    tMs: Math.max(0, nowMs - baseMs),
+    action: actionType,
+    rngState: Number.isFinite(state.rngState) ? (state.rngState >>> 0) : 0,
+    data
+  });
+}
+
+function recordRunEvent(type, data = {}) {
+  if (!state.runLog) return;
+  const nowMs = Date.now();
+  const baseMs = Number.isFinite(state.runStartedAt) && state.runStartedAt > 0 ? state.runStartedAt : nowMs;
+  const tMs = Math.max(0, nowMs - baseMs);
+  state.runLog.events.push({
+    tMs,
+    type,
+    rngState: Number.isFinite(state.rngState) ? (state.rngState >>> 0) : 0,
+    data: data || {}
+  });
+  maybeCheckpointFromEvent(type, tMs);
+}
+
+async function exportRunLog() {
+  if (!state.runLog) {
+    alert('No hay run log para exportar.');
+    return;
+  }
+  const payload = JSON.stringify(state.runLog, null, 2);
+  const fileSafeSeed = (state.runSeed || 'run').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 24);
+  const fileName = `runlog-${fileSafeSeed}-${Date.now()}.json`;
+
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(payload);
+      log('Run log copiado al portapapeles.');
+    }
+  } catch {}
+
+  const blob = new Blob([payload], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+const replayState = {
+  data: null,
+  idx: 0,
+  playing: false,
+  timer: null
+};
+
+function setupReplayImporter() {
+  const input = $('replay-file-input');
+  if (!input || input.dataset.bound === '1') return;
+  input.dataset.bound = '1';
+  input.addEventListener('change', async (ev) => {
+    const file = ev.target.files && ev.target.files[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      openReplayViewer(data);
+    } catch (e) {
+      alert('Replay invalido.');
+    } finally {
+      input.value = '';
+    }
+  });
+}
+
+function importReplayFile() {
+  setupReplayImporter();
+  const input = $('replay-file-input');
+  if (input) input.click();
+}
+
+function getReplayEventText(evt) {
+  if (!evt) return 'Sin evento';
+  const type = evt.type || 'unknown';
+  const data = evt.data || {};
+  const rng = Number.isFinite(evt.rngState) ? ` | rng=${evt.rngState}` : '';
+  return `[${evt.tMs || 0}ms] ${type}${rng}\n${JSON.stringify(data, null, 2)}`;
+}
+
+function renderReplayViewer() {
+  const header = $('replay-header');
+  const box = $('replay-event-box');
+  if (!header || !box || !replayState.data) return;
+  const total = replayState.data.events?.length || 0;
+  const evt = total > 0 ? replayState.data.events[replayState.idx] : null;
+  const mode = replayState.data.mode || 'unknown';
+  const seed = replayState.data.seed || 'sin-seed';
+  const actionCount = replayState.data?.replay?.actionSequence?.length || 0;
+  const checkpointCount = replayState.data?.replay?.rngCheckpoints?.length || 0;
+  header.innerText = `Replay ${replayState.idx + 1}/${Math.max(total, 1)} | ${mode} | ${seed} | acciones ${actionCount} | checkpoints ${checkpointCount}`;
+  box.innerText = getReplayEventText(evt);
+  const playBtn = $('btn-replay-play');
+  if (playBtn) playBtn.innerText = replayState.playing ? 'Pause' : 'Play';
+}
+
+function openReplayViewer(data) {
+  if (!data || !Array.isArray(data.events)) {
+    alert('Replay invalido: falta lista de eventos.');
+    return;
+  }
+  replayState.data = data;
+  replayState.idx = 0;
+  replayState.playing = false;
+  if (replayState.timer) clearInterval(replayState.timer);
+  replayState.timer = null;
+  $('replay-overlay').style.display = 'flex';
+  renderReplayViewer();
+}
+
+function closeReplayViewer() {
+  replayState.playing = false;
+  if (replayState.timer) clearInterval(replayState.timer);
+  replayState.timer = null;
+  $('replay-overlay').style.display = 'none';
+}
+
+function replayNext() {
+  if (!replayState.data || !Array.isArray(replayState.data.events)) return;
+  const total = replayState.data.events.length;
+  if (!total) return;
+  replayState.idx = Math.min(total - 1, replayState.idx + 1);
+  renderReplayViewer();
+}
+
+function replayPrev() {
+  if (!replayState.data || !Array.isArray(replayState.data.events)) return;
+  replayState.idx = Math.max(0, replayState.idx - 1);
+  renderReplayViewer();
+}
+
+function replayTogglePlay() {
+  if (!replayState.data || !Array.isArray(replayState.data.events) || replayState.data.events.length === 0) return;
+  replayState.playing = !replayState.playing;
+  if (replayState.playing) {
+    replayState.timer = setInterval(() => {
+      if (!replayState.playing) return;
+      const total = replayState.data.events.length;
+      if (replayState.idx >= total - 1) {
+        replayState.playing = false;
+        clearInterval(replayState.timer);
+        replayState.timer = null;
+        renderReplayViewer();
+        return;
+      }
+      replayState.idx++;
+      renderReplayViewer();
+    }, 700);
+  } else if (replayState.timer) {
+    clearInterval(replayState.timer);
+    replayState.timer = null;
+  }
+  renderReplayViewer();
+}
+
+
 
 /* =========================================================
    CORE LOGIC
 ========================================================= */
 function initGame() {
   if(typeof initAbilities === 'function') initAbilities();
-  $('btn-load').disabled = !localStorage.getItem('poke_save');
-}
-
-function startGame(mode) {
-  state.gameMode = mode;
-  state.streak = 0;
-  state.badges = 0;
-  state.inventory.balls = CONSTANTS.START_BALLS;
-  state.inventory.pots = CONSTANTS.START_POTS;
-  state.activeIdx = 0;
-  
-  let keys;
-  if (mode === 'nuzlocke') {
-    keys = Object.keys(POKEMON_SPECIES);
-  } else {
-    keys = Object.keys(POKEMON_SPECIES).filter(k => POKEMON_SPECIES[k].tier === 1); 
-    if (keys.length === 0) keys = Object.keys(POKEMON_SPECIES);
-  }
-  
-  const randomStarter = keys[Math.floor(Math.random() * keys.length)];
-  state.team = [new Pokemon(randomStarter, 5, mode === 'nuzlocke')]; 
-  
-  $('start-buttons').style.display = 'none';
-  $('game-title').classList.add('hidden-title');
-  $('mode-display').innerText = mode === 'nuzlocke' ? '☠️ Nuzlocke' : 'Normal';
-  
-  $('combat-log').innerHTML = '';
-  log(mode === 'nuzlocke' ? "💀 Modo Nuzlocke iniciado." : "Bienvenido a Kanto Rogue.");
-  
-  closeSwitchMenu(); 
-  turnLock = false; 
-  startBattle();
-}
-
-function getTeamAverageLevel() {
-  if (state.team.length === 0) return 5;
-  const total = state.team.reduce((sum, p) => sum + p.level, 0);
-  return Math.floor(total / state.team.length);
-}
-
-function startBattle() {
-  state.team.forEach(p => {
-      p.resetStages();
-      if(p.hp > 0) p.status = null;
-  });
-
-  const bgs = ['bg-forest', 'bg-cave', 'bg-ocean', 'bg-night', 'bg-volcano'];
-  const newBg = bgs[Math.floor(Math.random() * bgs.length)];
-  $('battle-scene').className = newBg;
-
-  const avgLevel = getTeamAverageLevel();
-  let targetLevel;
-  
-  if (avgLevel < 15) targetLevel = Math.max(2, avgLevel - 2 + Math.floor(Math.random() * 4)); 
-  else if (avgLevel < 30) targetLevel = avgLevel + Math.floor(Math.random() * 3); 
-  else targetLevel = avgLevel + Math.floor(Math.random() * 5);
-
-  const currentTier = getTierFromLevel(targetLevel);
-
-  let validKeys = Object.keys(POKEMON_SPECIES).filter(key => {
-    const pData = POKEMON_SPECIES[key];
-    const pTier = pData.spawnTier || 1; 
-    return pTier <= currentTier;
-  });
-
-  if (validKeys.length === 0) validKeys = Object.keys(POKEMON_SPECIES);
-
-  const pIdx = Math.floor(Math.random() * validKeys.length);
-  opponent = new Pokemon(validKeys[pIdx], targetLevel, state.gameMode === 'nuzlocke');
-  
-  const shinyText = opponent.isShiny ? '✨ ' : '';
-  log(`⚠️ ¡Un ${shinyText}<b>${opponent.name}</b> Nvl ${opponent.level} (Tier ${currentTier}) salvaje apareció!`);
-  
-  turnLock = false; 
-  renderAll();
-}
-
-function renderAll() {
-  const player = state.team[state.activeIdx];
-  if(!player && state.team.length > 0 && state.activeIdx >= 0) {
-    state.activeIdx = 0;
-  }
-  const currentP = state.team[state.activeIdx];
-  
-  if(!currentP) return;
-
-  // Render stats boxes with update logic for AnimeJS
-  renderBox(currentP, 'player-box', true);
-  renderBox(opponent, 'opponent-box', false);
-
-  const fetchSprite = async (mon, slot, back) => {
-    const slug = SLUG_MAP[mon.name] || mon.name.toLowerCase();
-    const uniqueId = `${mon.name}-${mon.isShiny ? 'shiny' : 'norm'}-${back?'back':'front'}`;
-    const slotEl = $(slot);
-    const currentImg = slotEl.querySelector('img');
-
-    if(currentImg && currentImg.dataset.uid === uniqueId) return;
-
-    try {
-      const res = await fetch(`https://pokeapi.co/api/v2/pokemon/${slug}`);
-      const data = await res.json();
-      const anim = data.sprites.versions['generation-v']['black-white'].animated;
-      let src;
-      
-      if (mon.isShiny) {
-         src = back ? (anim.back_shiny || data.sprites.back_shiny) : (anim.front_shiny || data.sprites.front_shiny);
-      } else {
-         src = back ? (anim.back_default || data.sprites.back_default) : (anim.front_default || data.sprites.front_default);
-      }
-      if (!src) src = back ? data.sprites.back_default : data.sprites.front_default;
-
-      slotEl.innerHTML = `<img src="${src}" class="sprite-img" data-uid="${uniqueId}">`;
-      
-      // Entrance Animation
-      anime({
-        targets: slotEl.querySelector('img'),
-        scale: [0, 1],
-        opacity: [0, 1],
-        easing: 'easeOutElastic(1, .8)',
-        duration: 800
-      });
-
-    } catch(e) {
-      slotEl.innerHTML = `<div style="font-size:3rem;">?</div>`;
-    }
-  };
-
-  fetchSprite(currentP, 'player-sprite-slot', true);
-  fetchSprite(opponent, 'opponent-sprite-slot', false);
-
-  $('balls-val').innerText = state.inventory.balls;
-  $('pots-val').innerText = state.inventory.pots;
-  $('streak-val').innerText = state.streak;
-  $('badges-val').innerText = state.badges;
-
-  const movesHTML = currentP.moves.map(mKey => {
-    const m = MOVES[mKey];
-    if(!m) return '';
-    const catShort = m.cat === 'Esp' ? 'Esp' : 'Fís';
-    return `
-    <button class="btn-move type-${m.tipo}" onclick="doTurn('${mKey}')" ${turnLock?'disabled':''}>
-      ${m.nombre}<br><small>${m.tipo} / ${m.poder} / ${catShort}</small>
-    </button>
-  `}).join('');
-  $('move-controls').innerHTML = movesHTML;
-  
-  $('btn-capture').disabled = turnLock || state.inventory.balls <= 0;
-  $('btn-potion').disabled = turnLock || state.inventory.pots <= 0 || currentP.hp >= currentP.maxHp;
-  $('btn-switch').disabled = turnLock || state.team.filter(p=>p.hp>0).length <= 1;
-}
-
-// UPDATE LOGIC FOR RENDER BOX TO ALLOW ANIME.JS TWEENING
-function renderBox(mon, id, isPlayer) {
-    const container = $(id);
-    const hpPct = (mon.hp / mon.maxHp) * 100;
-    const color = hpPct > 50 ? '#4caf50' : hpPct > 20 ? '#ffeb3b' : '#f44336';
-    const shinyMark = mon.isShiny ? '<span style="color:gold; text-shadow:0 0 5px orange">✨</span> ' : '';
-    const abilityHTML = mon.ability ? `<div style="font-size:0.7rem; color:#ffd54a; font-weight:bold; margin-top:-2px; margin-bottom:2px;">Hb: ${mon.ability}</div>` : '';
-    const statusHTML = mon.status ? `<span class="status-tag status-${mon.status}">${mon.status}</span>` : '';
-
-    // Check if we need to rebuild the entire HTML (new pokemon)
-    // We use a data attribute to track current pokemon name
-    const currentMonName = container.dataset.monName;
-    
-    if (currentMonName !== mon.name) {
-        // Build Structure
-        let xpHTML = '';
-        if (isPlayer) {
-          const xpPct = (mon.xp / mon.xpToNext) * 100;
-          xpHTML = `<div class="xp-container"><div class="xp-fill" style="width:${xpPct}%"></div></div>`;
-        }
-
-        container.innerHTML = `
-          <div class="poke-name"><span>${shinyMark}${mon.name}</span> <span class="poke-lvl">Nv${mon.level}</span></div>
-          ${abilityHTML}
-          <div class="hp-container">
-            <div class="hp-fill" style="width:${hpPct}%; background-color:${color}"></div>
-          </div>
-          ${xpHTML}
-          <div class="hp-text">${statusHTML}${mon.hp}/${mon.maxHp}</div>
-        `;
-        container.dataset.monName = mon.name;
-    } else {
-        // Just update specific parts to allow animation
-        container.querySelector('.poke-lvl').innerText = `Nv${mon.level}`;
-        const hpText = container.querySelector('.hp-text');
-        
-        // Animate HP Bar
-        anime({
-            targets: `#${id} .hp-fill`,
-            width: `${hpPct}%`,
-            backgroundColor: color,
-            easing: 'easeOutElastic(1, .8)',
-            duration: 800
-        });
-
-        // Update Text (Simple replace, rolling numbers is complex with text mix)
-        hpText.innerHTML = `${statusHTML}${mon.hp}/${mon.maxHp}`;
-        
-        // Update XP if player
-        if(isPlayer) {
-            const xpPct = (mon.xp / mon.xpToNext) * 100;
-            const xpFill = container.querySelector('.xp-fill');
-            if(xpFill) xpFill.style.width = `${xpPct}%`;
-        }
-    }
-}
-
-/* =========================================================
-   BATTLE LOGIC
-========================================================= */
-async function executeMove(attacker, defender, move, isPlayer) {
-  if(attacker.hp <= 0) return; 
-
-  const atkSlot = isPlayer ? 'player-sprite-slot' : 'opponent-sprite-slot';
-  const defSlot = isPlayer ? 'opponent-sprite-slot' : 'player-sprite-slot';
-  const atkZone = isPlayer ? 'zone-player' : 'zone-opponent';
-  const defZone = isPlayer ? 'zone-opponent' : 'zone-player';
-
-  if (attacker.status === 'FRZ') {
-    if(Math.random() < 0.2) {
-      attacker.status = null;
-      log(`${isPlayer?'🤠':'😈'} ¡${attacker.name} se descongeló!`);
-    } else {
-      log(`❄️ ${attacker.name} está congelado y no ataca.`);
-      return;
-    }
-  }
-  if (attacker.status === 'SLP') {
-    if(Math.random() < 0.33) {
-      attacker.status = null;
-      log(`${isPlayer?'🤠':'😈'} ¡${attacker.name} se despertó!`);
-    } else {
-      log(`💤 ${attacker.name} duerme profundamente.`);
-      return;
-    }
-  }
-  if (attacker.status === 'PAR' && Math.random() < 0.25) {
-    log(`⚡ ${attacker.name} está paralizado y no puede moverse.`);
-    return;
-  }
-
-  if(!move) {
-     log(`${isPlayer ? '👊' : '🔻'} ${attacker.name} falla su ataque.`);
-     return;
-  }
-
-  log(`${isPlayer ? '👊' : '🔻'} ${attacker.name} usa <b>${move.nombre}</b>!`);
-  await animateAttack(atkSlot, isPlayer);
-  
-  if (move.poder > 0 || move.nombre === 'Inversión' || move.nombre === 'Furia Dragón') {
-    await shootProjectile(move.tipo, atkZone, defZone);
-    const dmg = calcDamage(attacker, defender, move);
-    spawnParticles(move.tipo, $(defSlot));
-
-    if (dmg.mult === 0) {
-        log(`🚫 ¡No afecta a ${defender.name}!`);
-    } else {
-        if(dmg.mult > 1) log(`⚡ ¡Es súper efectivo!`);
-        if(dmg.mult < 1) log(`🛡️ No es muy efectivo...`);
-        
-        await animateDamage(defSlot);
-        defender.hp = Math.max(0, defender.hp - dmg.amount);
-        renderAll(); // Trigger HP bar animation
-    }
-  }
-
-  if (defender.hp > 0 && move.effect) {
-      if (Math.random() < (move.chance || 1.0)) {
-          applyEffect(attacker, defender, move.effect);
-      }
-  }
-}
-
-function applyEffect(attacker, defender, effect) {
-    if (effect === 'SPD_DOWN') { applyStatChange(defender, 'spe', -1, 'Velocidad'); }
-    else if (effect === 'DEF_DOWN') { applyStatChange(defender, 'def', -1, 'Defensa'); }
-    else if (effect === 'ATK_UP') { applyStatChange(attacker, 'atk', 1, 'Ataque'); }
-    else if (effect === 'DEF_UP') { applyStatChange(attacker, 'def', 1, 'Defensa'); }
-    else if (effect === 'ACC_DOWN') { log(`👁️ Precisión de ${defender.name} bajó.`); }
-    else if (effect === 'ALL_UP') {
-        ['atk','def','spa','spd','spe'].forEach(s => attacker.stages[s] = Math.min(6, attacker.stages[s]+1));
-        log(`🌟 ¡Todas las estadísticas de ${attacker.name} subieron!`);
-    }
-    else if (!defender.status) {
-        const statuses = ['BRN', 'PSN', 'PAR', 'FRZ', 'SLP']; 
-        if (statuses.includes(effect)) {
-            defender.status = effect;
-            log(`✨ ¡${defender.name} sufrió <b>${effect}</b>!`);
-            renderAll();
-        }
-    }
-}
-
-function applyStatChange(mon, stat, change, statName) {
-    mon.stages[stat] += change;
-    if (mon.stages[stat] > 6) mon.stages[stat] = 6;
-    if (mon.stages[stat] < -6) mon.stages[stat] = -6;
-    const dir = change > 0 ? 'subió' : 'bajó';
-    log(`📉 ${mon.name}: Su ${statName} ${dir}.`);
+  $('btn-load').disabled = !localStorage.getItem(SAVE_KEY);
+  setupReplayImporter();
+  const seedInput = $('seed-input');
+  if (seedInput && !seedInput.value) seedInput.value = autoGenerateSeed();
+  renderRunHistory();
+  refreshSeedUiState();
+  runPluginHook('onInitGame', { state });
 }
 
 
-async function runStatusDamage(mon, isPlayer) {
-  if (mon.hp <= 0) return;
-  if (mon.status === 'BRN' || mon.status === 'PSN') {
-    const dmg = Math.floor(mon.maxHp / 8);
-    mon.hp = Math.max(0, mon.hp - dmg);
-    await animateDamage(isPlayer ? 'player-sprite-slot' : 'opponent-sprite-slot');
-    renderAll();
-    log(`${mon.status === 'BRN' ? '🔥' : '☠️'} ${mon.name} sufre daño por ${mon.status}.`);
-  }
-}
 
-async function doTurn(moveKey) {
-  if(turnLock) return;
-  turnLock = true;
-  
-  const player = state.team[state.activeIdx];
-  const playerMove = MOVES[moveKey];
-  
-  let oppMoveKey = null;
-  if(opponent.moves.length > 0) {
-    oppMoveKey = opponent.moves[Math.floor(Math.random() * opponent.moves.length)];
-  }
-  const oppMove = oppMoveKey ? MOVES[oppMoveKey] : null;
 
-  const pSpeed = player.getStat('spe');
-  const oSpeed = opponent.getStat('spe');
-  
-  let first, second;
-  let moveFirst, moveSecond;
-  let isPlayerFirst;
-
-  const pPrio = (playerMove.nombre === 'Ataque Rápido' || playerMove.nombre === 'Velocidad Extrema') ? 1 : 0;
-  const oPrio = (oppMove && (oppMove.nombre === 'Ataque Rápido' || oppMove.nombre === 'Velocidad Extrema')) ? 1 : 0;
-
-  if (pPrio > oPrio) {
-      isPlayerFirst = true;
-  } else if (oPrio > pPrio) {
-      isPlayerFirst = false;
-  } else {
-      if (pSpeed >= oSpeed) {
-          if (pSpeed === oSpeed) isPlayerFirst = Math.random() < 0.5;
-          else isPlayerFirst = true;
-      } else {
-          isPlayerFirst = false;
-      }
-  }
-
-  if (isPlayerFirst) {
-      first = player; moveFirst = playerMove;
-      second = opponent; moveSecond = oppMove;
-  } else {
-      first = opponent; moveFirst = oppMove;
-      second = player; moveSecond = playerMove;
-  }
-
-  // ACTION 1
-  await executeMove(first, second, moveFirst, isPlayerFirst);
-
-  if (second.hp <= 0) {
-      await handleDeath(second, !isPlayerFirst);
-      return;
-  }
-
-  await wait(300);
-
-  // ACTION 2
-  await executeMove(second, first, moveSecond, !isPlayerFirst);
-
-  if (first.hp <= 0) {
-      await handleDeath(first, isPlayerFirst);
-      return;
-  }
-
-  // End Turn Effects
-  await runStatusDamage(player, true);
-  if (player.hp > 0) await runStatusDamage(opponent, false);
-
-  if (player.hp <= 0) {
-      await handleDeath(player, true);
-  } else if (opponent.hp <= 0) {
-      await handleDeath(opponent, false);
-  } else {
-      turnLock = false;
-      renderAll(); // Ensure buttons re-enable
-  }
-}
-
-async function handleDeath(mon, isPlayer) {
-    log(`☠️ ¡${mon.name} se debilitó!`);
-    
-    // Animate death (fade out and scale down)
-    const slot = isPlayer ? 'player-sprite-slot' : 'opponent-sprite-slot';
-    await anime({
-        targets: `#${slot} img`,
-        scale: 0,
-        opacity: 0,
-        filter: 'grayscale(100%)',
-        duration: 800,
-        easing: 'easeInBack'
-    }).finished;
-
-    if (isPlayer) {
-        if (state.gameMode === 'nuzlocke') {
-            log(`⚰️ Nuzlocke: ¡${mon.name} ha muerto para siempre!`);
-            state.team.splice(state.activeIdx, 1);
-            state.activeIdx = -1;
-        }
-        checkDefeat();
-    } else {
-        await handleWin();
-        turnLock = false;
-        renderAll();
-    }
-}
-
-function calcDamage(atkMon, defMon, move) {
-  let mult = 1;
-  if (TYPE_CHART[move.tipo]) {
-    defMon.types.forEach(t => {
-      if (TYPE_CHART[move.tipo][t] !== undefined) mult *= TYPE_CHART[move.tipo][t];
-    });
-  }
-  if (mult === 0) return { amount: 0, mult: 0 }; 
-
-  let aStat, dStat;
-  if (move.cat === 'Fis') {
-      aStat = atkMon.getStat('atk');
-      dStat = defMon.getStat('def');
-      if (atkMon.status === 'BRN') aStat = Math.floor(aStat * 0.5);
-  } else {
-      aStat = atkMon.getStat('spa');
-      dStat = defMon.getStat('spd');
-  }
-
-  if (move.nombre === 'Furia Dragón') return { amount: 40, mult: 1 };
-
-  const base = ((2 * atkMon.level / 5 + 2) * move.poder * (aStat / dStat)) / 50 + 2;
-  
-  let critical = 1;
-  if (Math.random() < 0.0625) { critical = 1.5; log('🎯 ¡Golpe Crítico!'); }
-
-  let stab = atkMon.types.includes(move.tipo) ? 1.5 : 1;
-
-  const total = Math.floor(base * mult * stab * critical * (Math.random() * 0.15 + 0.85)); 
-  return { amount: total, mult: mult };
-}
-
-/* =========================================================
-   POST-BATTLE
-========================================================= */
-async function handleWin() {
-  log(`🏆 ¡Ganaste! ${opponent.name} debilitado.`);
-  state.streak++;
-
-  if (state.streak % 5 === 0) {
-      state.badges++;
-      log(`🏅 <b>¡Has conseguido una Medalla de Gimnasio!</b> (Total: ${state.badges})`);
-  }
-
-  if (state.streak === 40) {
-      log(`🌟 <b>¡HITO LEGENDARIO!</b> Has conseguido las 8 Medallas.`);
-      const rewardMon = state.team[state.activeIdx] || state.team[0];
-      if (rewardMon) {
-          rewardMon.isShiny = true;
-          rewardMon.bonusMultiplier = 1.3; 
-          rewardMon.recalcStats();
-          rewardMon.hp = rewardMon.maxHp; 
-          log(`✨💎 ¡Tu <b>${rewardMon.name}</b> ahora es Shiny y un 30% más fuerte!`);
-          await wait(2000);
-      }
-  }
-  
-  const teamSizeBonus = 1 + (state.team.length * 0.15); 
-  const baseXP = ((opponent.level * 40) + 100) * CONSTANTS.XP_MULT * teamSizeBonus; 
-  const shareXP = Math.floor(baseXP / state.team.length);
-  
-  state.team.forEach(p => p.status = null);
-
-  for (let i = 0; i < state.team.length; i++) {
-    const member = state.team[i];
-    if (member.hp <= 0) continue; 
-
-    let gain = (i === state.activeIdx) ? Math.floor(shareXP * 1.3) : shareXP;
-    member.xp += gain;
-    
-    while (member.xp >= member.xpToNext) {
-      member.xp -= member.xpToNext;
-      member.level++;
-      member.xpToNext = member.level * 60 + 100;
-      member.recalcStats(); 
-      member.hp = Math.min(member.hp + 5, member.maxHp); 
-      log(`🆙 ¡${member.name} subió al Nvl ${member.level}!`);
-      await checkEvolutionAndMoves(member);
-      member.hp = member.maxHp;
-    }
-  }
-
-  if(state.streak % CONSTANTS.HEAL_STREAK === 0) {
-    state.team.forEach(p => p.hp = p.maxHp);
-    state.inventory.balls = Math.min(CONSTANTS.MAX_BALLS, state.inventory.balls + 5);
-    state.inventory.pots = Math.min(CONSTANTS.MAX_POTS, state.inventory.pots + 2);
-    log(`🏥 <b>Centro Pokémon:</b> ¡Equipo curado y objetos repuestos!`);
-  }
-
-  await wait(1500);
-  startBattle();
-}
-
-async function checkEvolutionAndMoves(player) {
-  const evoData = EVOLUTIONS[player.name];
-  if(evoData && evoData[player.level]) {
-    const result = evoData[player.level];
-    if(POKEMON_SPECIES[result]) {
-      const oldName = player.name;
-      player.name = result;
-      player.baseStats = {
-          hp: POKEMON_SPECIES[result].hp,
-          atk: POKEMON_SPECIES[result].atk,
-          def: POKEMON_SPECIES[result].def,
-          spa: POKEMON_SPECIES[result].sp_atk,
-          spd: POKEMON_SPECIES[result].sp_def,
-          spe: POKEMON_SPECIES[result].speed
-      };
-      player.recalcStats();
-      player.hp = player.maxHp;
-      log(`✨ ¡Tu ${oldName} evolucionó a <b>${player.name}</b>!`);
-      
-      // Evolution FX
-      const slot = 'player-sprite-slot';
-      await anime({
-          targets: `#${slot} img`,
-          filter: ['brightness(1)','brightness(5)', 'brightness(1)'],
-          scale: [1, 1.5, 1],
-          duration: 1000,
-          easing: 'easeInOutQuad'
-      }).finished;
-    }
-  }
-
-  let newMove = null;
-
-  if (state.gameMode === 'nuzlocke') {
-    if (player.level % 10 === 0) {
-      const allMoves = Object.keys(MOVES);
-      newMove = allMoves[Math.floor(Math.random() * allMoves.length)];
-    }
-  } else {
-    if(evoData && evoData[player.level] && MOVES[evoData[player.level]]) {
-      newMove = evoData[player.level];
-    }
-  }
-
-  if (newMove && !player.moves.includes(newMove)) {
-    if (player.moves.length < 4) {
-      player.moves.push(newMove);
-      log(`💡 ¡${player.name} aprendió <b>${newMove}</b>!`);
-    } else {
-      await promptForgetMove(player, newMove);
-    }
-  }
-}
-
-function promptForgetMove(player, newMove) {
-  return new Promise(resolve => {
-    const overlay = $('move-overlay');
-    const list = $('move-list');
-    const cancelBtn = $('btn-cancel-learn');
-    list.innerHTML = '';
-    
-    const title = document.createElement('div');
-    title.innerHTML = `<b>${player.name}</b> quiere aprender <b style="color:yellow">${newMove}</b>.`;
-    title.style.marginBottom = '10px';
-    title.style.textAlign = 'center';
-    list.appendChild(title);
-
-    player.moves.forEach((mKey, idx) => {
-      const m = MOVES[mKey];
-      const div = document.createElement('div');
-      div.className = 'modal-card';
-      div.innerHTML = `<span>${m.nombre}</span> <small>${m.tipo}/${m.poder}</small>`;
-      div.onclick = () => {
-        player.moves[idx] = newMove;
-        log(`💡 ¡${player.name} olvidó ${m.nombre} y aprendió <b>${MOVES[newMove].nombre}</b>!`);
-        overlay.style.display = 'none';
-        resolve();
-      };
-      list.appendChild(div);
-    });
-
-    cancelBtn.onclick = () => {
-      log(`❌ ${player.name} no aprendió ${MOVES[newMove].nombre}.`);
-      overlay.style.display = 'none';
-      resolve();
-    }
-    
-    overlay.style.display = 'flex';
-    
-    // Animate Modal In
-    anime({
-        targets: '#move-overlay',
-        opacity: [0, 1],
-        scale: [0.9, 1],
-        duration: 300,
-        easing: 'easeOutQuad'
-    });
-  });
-}
-
-function checkDefeat() {
-  const alive = state.team.some(p => p.hp > 0);
-  if(!alive) {
-    log(`💀 Game Over. Racha final: ${state.streak} | Medallas: ${state.badges}`);
-    $('start-buttons').style.display = 'flex';
-    $('btn-normal').innerText = 'Reintentar (Normal)';
-    $('btn-nuzlocke').innerText = 'Reintentar (Nuzlocke)';
-    turnLock = true; 
-    renderAll();
-  } else {
-    openSwitchMenu(true);
-  }
-}
-
-/* =========================================================
-   ACTIONS
-========================================================= */
-function usePotion() {
-  if (turnLock) return;
-  const p = state.team[state.activeIdx];
-  if(state.inventory.pots > 0 && p.hp < p.maxHp) {
-    turnLock = true;
-    state.inventory.pots--;
-    const healAmount = Math.floor(p.maxHp * 0.60);
-    p.hp = Math.min(p.maxHp, p.hp + healAmount);
-    log(`💊 Usaste Poción. ${p.name} recuperó ${healAmount} PS.`);
-    renderAll();
-    
-    // Heal particles
-    spawnParticles('Planta', $('player-sprite-slot'));
-
-    setTimeout(async () => {
-      let oppMoveKey = null;
-      if(opponent.moves.length > 0) {
-        oppMoveKey = opponent.moves[Math.floor(Math.random() * opponent.moves.length)];
-      }
-      const oppMove = oppMoveKey ? MOVES[oppMoveKey] : null;
-
-      await executeMove(opponent, p, oppMove, false);
-      
-      await runStatusDamage(p, true);
-      if(p.hp > 0) await runStatusDamage(opponent, false);
-      
-      renderAll();
-
-      if(p.hp <= 0) {
-        await handleDeath(p, true);
-      } else {
-         turnLock = false;
-         renderAll();
-      }
-    }, 1000);
-  }
-}
-
-async function attemptCapture() {
-  if(turnLock || state.inventory.balls <= 0) return;
-  turnLock = true;
-  state.inventory.balls--;
-  renderAll();
-  
-  log(`🎱 ¡Lanzaste una Pokéball!`);
-  
-  const ball = document.createElement('div');
-  ball.innerHTML = '🎱';
-  ball.style.position = 'absolute';
-  ball.style.left = '20%'; ball.style.bottom = '20%'; ball.style.fontSize = '30px';
-  ball.style.zIndex = 100;
-  $('battle-scene').appendChild(ball);
-  
-  await anime({
-      targets: ball,
-      left: '70%', top: '20%',
-      rotate: '2turn',
-      duration: 500,
-      easing: 'easeInQuad'
-  }).finished;
-  
-  // Shake effect on capture attempt
-  await anime({
-      targets: ball,
-      translateX: [0, -5, 5, -5, 5, 0],
-      duration: 600,
-      easing: 'linear'
-  }).finished;
-  
-  ball.remove();
-  
-  const hpFactor = (opponent.maxHp - opponent.hp) / opponent.maxHp; 
-  const statusBonus = opponent.status ? 0.2 : 0;
-  const chance = 0.4 + (hpFactor * 0.5) + statusBonus; 
-  
-  if(Math.random() < chance) {
-    log(`⭐ ¡Capturaste a <b>${opponent.name}</b>!`);
-    opponent.xp = 0;
-    opponent.xpToNext = opponent.level * 60 + 100;
-    opponent.hp = opponent.maxHp; 
-    opponent.status = null; 
-    opponent.resetStages();
-
-    if (state.team.length < CONSTANTS.MAX_TEAM) {
-      state.team.push(opponent);
-      await wait(1000);
-      startBattle();
-    } else {
-      openPartyFullMenu(opponent);
-    }
-  } else {
-    log(`💢 ¡${opponent.name} se liberó!`);
-    
-    let oppMoveKey = null;
-    if(opponent.moves.length > 0) {
-      oppMoveKey = opponent.moves[Math.floor(Math.random() * opponent.moves.length)];
-    }
-    const oppMove = oppMoveKey ? MOVES[oppMoveKey] : null;
-
-    await executeMove(opponent, state.team[state.activeIdx], oppMove, false);
-    
-    const p = state.team[state.activeIdx];
-    await runStatusDamage(p, true);
-    if(p.hp > 0) await runStatusDamage(opponent, false);
-
-    renderAll();
-    
-    if(p.hp <= 0) {
-        await handleDeath(p, true);
-    } else {
-        turnLock = false;
-        renderAll();
-    }
-  }
-}
-
-function openPartyFullMenu(newMon) {
-  const overlay = $('party-full-overlay');
-  const list = $('party-full-list');
-  list.innerHTML = '';
-  
-  state.team.forEach((p, idx) => {
-    const div = document.createElement('div');
-    const shiny = p.isShiny ? '✨' : '';
-    div.className = 'modal-card';
-    div.innerHTML = `<span>${shiny}${p.name} (Nv${p.level})</span> <small>Liberar</small>`;
-    div.onclick = async () => {
-      log(`👋 Has liberado a ${p.name}. ¡Bienvenido ${newMon.name}!`);
-      state.team[idx] = newMon; 
-      overlay.style.display = 'none';
-      await wait(1000);
-      startBattle();
-    };
-    list.appendChild(div);
-  });
-
-  const btnReleaseNew = $('btn-release-new');
-  btnReleaseNew.onclick = async () => {
-    log(`👋 Liberaste a ${newMon.name}.`);
-    overlay.style.display = 'none';
-    await wait(1000);
-    startBattle();
-  };
-
-  overlay.style.display = 'flex';
-  
-  // Animation
-  anime({
-     targets: '#party-full-overlay',
-     opacity: [0, 1],
-     translateY: [20, 0],
-     duration: 300,
-     easing: 'easeOutQuad'
-  });
-}
-
-function openSwitchMenu(forced = false) {
-  const overlay = $('switch-overlay');
-  const list = $('switch-list');
-  list.innerHTML = '';
-  
-  state.team.forEach((p, idx) => {
-    const div = document.createElement('div');
-    const fainted = p.hp <= 0;
-    const shiny = p.isShiny ? '✨' : '';
-    const active = idx === state.activeIdx;
-    
-    div.className = `modal-card ${fainted ? 'fainted' : ''} ${active ? 'selected' : ''}`;
-    div.innerHTML = `
-      <span>${shiny}${p.name} (Nv${p.level})</span>
-      <b>${p.hp}/${p.maxHp} HP</b>
-    `;
-    if(!fainted) {
-      div.onclick = () => doSwitch(idx, forced);
-    }
-    list.appendChild(div);
-  });
-  
-  overlay.style.display = 'flex';
-  if(forced) $('switch-overlay').querySelector('button').style.display = 'none'; 
-  else $('switch-overlay').querySelector('button').style.display = 'block'; 
-
-  // Stagger animation for list items
-  anime({
-     targets: '.modal-card',
-     translateX: [-20, 0],
-     opacity: [0, 1],
-     delay: anime.stagger(50),
-     duration: 300,
-     easing: 'easeOutQuad'
-  });
-}
-
-function closeSwitchMenu() {
-  $('switch-overlay').style.display = 'none';
-}
-
-function doSwitch(idx, forced) {
-  if(idx === state.activeIdx && state.team[idx].hp > 0) {
-    closeSwitchMenu();
-    return;
-  }
-  
-  state.activeIdx = idx;
-  log(`🔄 ¡Adelante <b>${state.team[idx].name}</b>!`);
-  closeSwitchMenu();
-  renderAll();
-  
-  if(!forced) {
-    turnLock = true;
-    renderAll(); 
-
-    setTimeout(async () => {
-      try {
-        const p = state.team[state.activeIdx];
-        
-        let oppMoveKey = null;
-        if(opponent.moves && opponent.moves.length > 0) {
-          oppMoveKey = opponent.moves[Math.floor(Math.random() * opponent.moves.length)];
-        }
-        const oppMove = oppMoveKey ? MOVES[oppMoveKey] : null;
-        
-        log(`🔻 El rival aprovecha el cambio.`);
-        await executeMove(opponent, p, oppMove, false);
-        
-        await runStatusDamage(p, true);
-        renderAll();
-
-        if(p.hp <= 0) {
-          await handleDeath(p, true);
-        } else {
-          turnLock = false; 
-        }
-      } catch (e) {
-        console.error("Error durante el cambio:", e);
-        turnLock = false; 
-      } finally {
-        renderAll();
-      }
-    }, 1000);
-  } else {
-    turnLock = false;
-    renderAll();
-  }
-}
-
-function saveGame() {
-  const data = JSON.stringify(state);
-  localStorage.setItem('poke_save', data);
-  alert('Partida guardada.');
-  $('btn-load').disabled = false;
-}
-
-function loadGame() {
-  const data = localStorage.getItem('poke_save');
-  if(data) {
-    try {
-      const rawState = JSON.parse(data);
-      state = {
-          ...rawState,
-          team: rawState.team.map(d => {
-              const p = new Pokemon(d.name, d.level);
-              Object.assign(p, d);
-              return p;
-          })
-      };
-      opponent = new Pokemon(opponent ? opponent.name : 'Rattata', 5);
-
-      if (!state.gameMode) state.gameMode = 'normal';
-      if (state.badges === undefined) state.badges = 0;
-
-      $('start-buttons').style.display = 'none';
-      $('game-title').classList.add('hidden-title');
-      $('mode-display').innerText = state.gameMode === 'nuzlocke' ? '☠️ Nuzlocke' : 'Normal';
-      
-      startBattle(); 
-    } catch(e) {
-      console.error(e);
-      alert("Error al cargar partida.");
-    }
-  }
-}
 </script>
+<script src="runtime_plugins.js"></script>
+<script src="runtime_core_utils.js"></script>
+<script src="runtime_seed.js"></script>
+<script src="runtime_save_migration.js"></script>
+<script src="runtime_sprites.js"></script>
+<script src="run_orchestration.js"></script>
+<script src="battle_helpers.js"></script>
+<script src="battle_render.js"></script>
+<script src="battle_vfx.js"></script>
+<script src="battle_effects.js"></script>
+<script src="battle_turn.js"></script>
+<script src="battle_flow.js"></script>
+<script src="run_persistence.js"></script>
+<script src="abilities.js"></script>
+<script src="ia_logic.js"></script>
+<script src="roguerun_addon.js"></script>
+<script src="pvp_addon.js"></script>
+<script src="pvp_online_addon.js"></script>
+<script src="info_addon.js"></script>
 </body>
 </html>
+
+
+
+
+
+
+
+
+
+
