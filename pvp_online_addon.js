@@ -22,7 +22,12 @@
     channelOpenTimeoutId: null,
     qrChunks: null,
     qrChunkIndex: 0,
-    scanChunkSession: null
+    scanChunkSession: null,
+    scanDeviceIds: [],
+    scanDeviceLabels: [],
+    scanDeviceIdx: 0,
+    scanTargetTextareaId: null,
+    scanSessionId: 0
   };
 
   function encodeSignal(obj) {
@@ -234,6 +239,8 @@
   function stopQrScan() {
     onlinePvp.scanActive = false;
     onlinePvp.scanChunkSession = null;
+    onlinePvp.scanTargetTextareaId = null;
+    onlinePvp.scanSessionId++;
     if (onlinePvp.scanStream) {
       try { onlinePvp.scanStream.getTracks().forEach(t => t.stop()); } catch {}
     }
@@ -242,34 +249,93 @@
     if (box) box.remove();
   }
 
+  async function getVideoInputDevices() {
+    if (!navigator.mediaDevices?.enumerateDevices) return [];
+    const all = await navigator.mediaDevices.enumerateDevices();
+    return all.filter(d => d.kind === 'videoinput');
+  }
+
+  function chooseInitialCameraIndex(devices) {
+    if (!Array.isArray(devices) || devices.length === 0) return 0;
+    const label = d => String(d?.label || '').toLowerCase();
+    const isBack = d => /(back|rear|trasera|world)/i.test(label(d));
+    const isUltra = d => /(ultra|0\.5|wide|uw)/i.test(label(d));
+
+    const preferred = devices.findIndex(d => isBack(d) && !isUltra(d));
+    if (preferred >= 0) return preferred;
+    const back = devices.findIndex(d => isBack(d));
+    if (back >= 0) return back;
+    return 0;
+  }
+
+  function refreshScanCameraHint() {
+    const el = document.getElementById('online-qr-camera-label');
+    if (!el) return;
+    if (!onlinePvp.scanDeviceIds.length) {
+      el.innerText = 'Camara: auto';
+      return;
+    }
+    const idx = Math.max(0, Math.min(onlinePvp.scanDeviceIdx, onlinePvp.scanDeviceIds.length - 1));
+    const name = onlinePvp.scanDeviceLabels[idx] || `Camara ${idx + 1}`;
+    el.innerText = `Camara: ${name}`;
+  }
+
   async function startQrScanInto(textareaId) {
     if (!hasQrScanSupport()) {
       alert('Escaneo QR no disponible: no hay acceso a camara.');
       return;
     }
-    stopQrScan();
+    if (!onlinePvp.scanActive) stopQrScan();
+    onlinePvp.scanTargetTextareaId = textareaId;
+    const sessionId = ++onlinePvp.scanSessionId;
     const body = document.getElementById('online-pvp-body');
     if (!body) return;
 
-    const box = document.createElement('div');
-    box.id = 'online-qr-scan-box';
-    box.style.display = 'grid';
-    box.style.gap = '6px';
-    box.innerHTML = `
-      <video id="online-qr-video" autoplay playsinline style="width:100%; max-height:220px; border-radius:8px; border:1px solid rgba(255,255,255,.2); background:#000;"></video>
-      <div id="online-qr-scan-status" style="font-size:.74rem; color:#9aa3c7;">Apunta al QR. Buscando...</div>
-      <button class="btn-action" onclick="onlinePvPStopScan()">Detener escaneo</button>
-    `;
-    body.appendChild(box);
+    let box = document.getElementById('online-qr-scan-box');
+    if (!box) {
+      box = document.createElement('div');
+      box.id = 'online-qr-scan-box';
+      box.style.display = 'grid';
+      box.style.gap = '6px';
+      box.innerHTML = `
+        <video id="online-qr-video" autoplay playsinline style="width:100%; max-height:220px; border-radius:8px; border:1px solid rgba(255,255,255,.2); background:#000;"></video>
+        <div id="online-qr-scan-status" style="font-size:.74rem; color:#9aa3c7;">Apunta al QR. Buscando...</div>
+        <div id="online-qr-camera-label" style="font-size:.72rem; color:#9aa3c7;">Camara: auto</div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+          <button class="btn-action" onclick="onlinePvPSwitchCamera()">Cambiar camara</button>
+          <button class="btn-action" onclick="onlinePvPStopScan()">Detener escaneo</button>
+        </div>
+      `;
+      body.appendChild(box);
+    }
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+      const devices = await getVideoInputDevices();
+      if (!onlinePvp.scanDeviceIds.length && devices.length) {
+        onlinePvp.scanDeviceIds = devices.map(d => d.deviceId);
+        onlinePvp.scanDeviceLabels = devices.map(d => d.label || '');
+        onlinePvp.scanDeviceIdx = chooseInitialCameraIndex(devices);
+      }
+      const selectedDeviceId = onlinePvp.scanDeviceIds[onlinePvp.scanDeviceIdx] || null;
+      const constraints = selectedDeviceId
+        ? { video: { deviceId: { exact: selectedDeviceId } }, audio: false }
+        : { video: { facingMode: { ideal: 'environment' } }, audio: false };
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
       onlinePvp.scanStream = stream;
       onlinePvp.scanActive = true;
+      refreshScanCameraHint();
       const video = document.getElementById('online-qr-video');
       if (!video) return;
       video.srcObject = stream;
       await video.play();
+      try {
+        const track = stream.getVideoTracks()[0];
+        const caps = track?.getCapabilities ? track.getCapabilities() : null;
+        if (caps && Number.isFinite(caps.maxZoom) && caps.maxZoom > 1) {
+          const preferredZoom = Math.min(2, caps.maxZoom);
+          await track.applyConstraints({ advanced: [{ zoom: preferredZoom }] });
+        }
+      } catch {}
 
       let detector = null;
       if (hasBarcodeDetectorSupport()) {
@@ -299,7 +365,9 @@
             if (target) target.value = assembled;
             if (statusEl) statusEl.innerText = 'Codigo completo leido.';
             try { if (navigator.vibrate) navigator.vibrate(120); } catch {}
-            setTimeout(() => stopQrScan(), 120);
+            setTimeout(() => {
+              if (sessionId === onlinePvp.scanSessionId) stopQrScan();
+            }, 120);
             return true;
           }
           return false;
@@ -307,11 +375,13 @@
         if (target) target.value = raw;
         if (statusEl) statusEl.innerText = 'Codigo QR leido.';
         try { if (navigator.vibrate) navigator.vibrate(120); } catch {}
-        setTimeout(() => stopQrScan(), 120);
+        setTimeout(() => {
+          if (sessionId === onlinePvp.scanSessionId) stopQrScan();
+        }, 120);
         return true;
       };
       const tick = async () => {
-        if (!onlinePvp.scanActive) return;
+        if (!onlinePvp.scanActive || sessionId !== onlinePvp.scanSessionId) return;
         try {
           loops++;
           if (statusEl && loops % 12 === 0) statusEl.innerText = 'Buscando QR...';
@@ -338,7 +408,7 @@
       };
       tick();
     } catch {
-      stopQrScan();
+      if (sessionId === onlinePvp.scanSessionId) stopQrScan();
       alert('No se pudo abrir la camara para escanear.');
     }
   }
@@ -775,6 +845,16 @@
 
   window.onlinePvPStopScan = function onlinePvPStopScan() {
     stopQrScan();
+  };
+
+  window.onlinePvPSwitchCamera = function onlinePvPSwitchCamera() {
+    if (!onlinePvp.scanTargetTextareaId) return;
+    if (!Array.isArray(onlinePvp.scanDeviceIds) || onlinePvp.scanDeviceIds.length <= 1) {
+      alert('No hay otra camara disponible.');
+      return;
+    }
+    onlinePvp.scanDeviceIdx = (onlinePvp.scanDeviceIdx + 1) % onlinePvp.scanDeviceIds.length;
+    startQrScanInto(onlinePvp.scanTargetTextareaId);
   };
 
   window.onlinePvPQrNext = function onlinePvPQrNext() {
