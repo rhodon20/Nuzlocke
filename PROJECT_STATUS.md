@@ -626,6 +626,51 @@
   - explicit channel-open timeout with retry UI instead of silent waiting states
   - added connection diagnostics logs for failed/disconnected states.
 
+## Exploratory - PvP Online QR Scan Reliability (Phase 28 Added)
+- Implemented segmented QR payloads for large WebRTC signaling blobs:
+  - offer/answer can now be emitted as multi-QR sequence (`PVPSEG` chunks)
+  - in-modal QR pagination controls (`anterior/siguiente`)
+- Implemented chunked scan assembly on camera input:
+  - scanner accumulates parts and auto-rebuilds final signal when complete
+  - progress indicator shown during scan (`QR capturado X/Y`).
+- Added wider QR scan compatibility fallback:
+  - primary: `BarcodeDetector`
+  - fallback: dynamic `jsQR` decoder from camera frames.
+
+## Exploratory - PvP Online Simpler Transfer UX (Phase 29 Added)
+- Added non-QR transfer alternatives to keep the same offer/answer method but simplify user flow:
+  - `Pegar` desde portapapeles
+  - `Compartir` (Web Share API on mobile)
+  - `Descargar TXT` / `Cargar TXT`
+- Added explicit in-flow guidance when QR is unreliable:
+  - “Si el QR falla, usa Compartir o Copiar/Pegar.”
+
+## Exploratory - PvP Online Mobile Camera Routing Fix (Phase 30 Added)
+- Added in-scan camera switching control (`Cambiar camara`) to handle devices that default to ultra-wide rear lens.
+- Added automatic preferred rear-camera selection heuristics (prioritize back camera excluding ultra-wide labels when possible).
+- Added optional scan-time zoom constraint (where supported) to improve close QR readability on Samsung-like camera stacks.
+
+## Exploratory - PvP Online Explicit Camera Selector (Phase 31 Added)
+- Added explicit in-scan camera selector UI (dropdown + apply) instead of relying only on camera cycling.
+- Added mode-based fallback options even when device enumeration is limited:
+  - `Trasera (ideal)`
+  - `Trasera (exacta)`
+  - `Frontal (ideal)`
+- Kept quick cycle button (`Siguiente camara`) as secondary control.
+
+## Exploratory - PvP Online Draft Mode + VFX Sync (Phase 32 Added)
+- Enabled two online host flows from lobby:
+  - `Partida Clasica`
+  - `Partida Draft`
+- Implemented online draft protocol on top of current WebRTC channel:
+  - shared draft pool initialization
+  - turn-based picks (`P1`/`P2`) synchronized via channel messages
+  - automatic match start once both sides complete 6 picks.
+- Added host/guest pick handling:
+  - host can pick directly and broadcasts updated draft state
+  - guest submits pick request and receives authoritative state from host.
+- Added round VFX payload propagation (`ROUND_STATE.vfx`) so both devices can render combat attack animations consistently before snapshot apply.
+
 ## Pending Roadmap (To Be Added)
 ### Short Term (Next Steps)
 - Expand non-damage move semantics:

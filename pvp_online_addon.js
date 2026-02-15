@@ -29,7 +29,16 @@
     scanCameraOptions: [],
     scanCameraIdx: 0,
     scanTargetTextareaId: null,
-    scanSessionId: 0
+    scanSessionId: 0,
+    matchMode: 'classic',
+    lastRoundVfx: null,
+    draft: {
+      active: false,
+      pool: [],
+      p1Picks: [],
+      p2Picks: [],
+      turn: 1
+    }
   };
 
   function encodeSignal(obj) {
@@ -153,7 +162,8 @@
 
   function renderLobbyHome() {
     setLobbyMessage(`
-      <button class="btn-action" onclick="onlinePvPHost()">Crear partida (Host)</button>
+      <button class="btn-action" onclick="onlinePvPHost('classic')">Crear partida Clasica (Host)</button>
+      <button class="btn-action" onclick="onlinePvPHost('draft')">Crear partida Draft (Host)</button>
       <button class="btn-action" onclick="onlinePvPJoinPrompt()">Unirse (Guest)</button>
       <div style="font-size:.75rem; color:#9aa3c7; line-height:1.35;">
         Flujo: Host crea codigo oferta -> Guest responde con codigo respuesta -> Host pega respuesta.
@@ -458,8 +468,11 @@
     onlinePvp.waitingAnswer = false;
     onlinePvp.connected = false;
     onlinePvp.matchStarted = false;
+    onlinePvp.matchMode = 'classic';
+    onlinePvp.lastRoundVfx = null;
     onlinePvp.qrChunks = null;
     onlinePvp.qrChunkIndex = 0;
+    resetOnlineDraftState();
     stopQrScan();
     clearChannelTimeout();
     if (onlinePvp.dc) {
@@ -514,6 +527,156 @@
     return [];
   }
 
+  function resetOnlineDraftState() {
+    onlinePvp.draft = {
+      active: false,
+      pool: [],
+      p1Picks: [],
+      p2Picks: [],
+      turn: 1
+    };
+  }
+
+  function buildDraftPool(size = 16) {
+    const keys = Object.keys(POKEMON_SPECIES || {});
+    const limit = Math.min(size, keys.length);
+    const uniq = new Set();
+    while (uniq.size < limit) {
+      const k = keys[Math.floor(gameRandom() * keys.length)];
+      uniq.add(k);
+    }
+    return Array.from(uniq);
+  }
+
+  function renderOnlineDraftState() {
+    const d = onlinePvp.draft;
+    if (!d.active) return;
+    const localSide = (onlinePvp.role === 'host') ? 1 : 2;
+    const isMyTurn = d.turn === localSide;
+    const labelTurn = d.turn === 1 ? 'P1' : 'P2';
+    const cards = (d.pool || []).map(k => {
+      const disabled = !isMyTurn ? 'disabled' : '';
+      return `<button class="btn-action" onclick="onlinePvPDraftPick('${k}')" ${disabled} style="padding:8px;">${k}</button>`;
+    }).join('');
+    const me = localSide === 1 ? 'P1' : 'P2';
+    setLobbyMessage(`
+      <div style="font-size:.82rem; color:#ffd54a; font-weight:700;">Draft Online | Tu lado: ${me}</div>
+      <div style="font-size:.75rem; color:#9aa3c7;">Turno: ${labelTurn} ${isMyTurn ? '(tu turno)' : ''}</div>
+      <div style="font-size:.75rem; color:#9aa3c7;">P1 (${d.p1Picks.length}/6): ${(d.p1Picks.join(', ') || '-')}</div>
+      <div style="font-size:.75rem; color:#9aa3c7;">P2 (${d.p2Picks.length}/6): ${(d.p2Picks.join(', ') || '-')}</div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; max-height:38vh; overflow:auto;">${cards}</div>
+      <div style="font-size:.72rem; color:#9aa3c7;">Selecciona un pokemon de la pool compartida.</div>
+    `);
+    const ov = ensureOverlay();
+    ov.style.display = 'flex';
+  }
+
+  function applyHostDraftPick(side, key) {
+    const d = onlinePvp.draft;
+    if (!d.active) return false;
+    if (d.turn !== side) return false;
+    const idx = d.pool.indexOf(key);
+    if (idx < 0) return false;
+    d.pool.splice(idx, 1);
+    if (side === 1) d.p1Picks.push(key);
+    else d.p2Picks.push(key);
+    const full1 = d.p1Picks.length >= 6;
+    const full2 = d.p2Picks.length >= 6;
+    if (!full1 || !full2) {
+      if (!full1 && !full2) d.turn = side === 1 ? 2 : 1;
+      else d.turn = full1 ? 2 : 1;
+    }
+    return true;
+  }
+
+  function draftStatePayload() {
+    const d = onlinePvp.draft;
+    return {
+      active: !!d.active,
+      pool: Array.isArray(d.pool) ? d.pool.slice() : [],
+      p1Picks: Array.isArray(d.p1Picks) ? d.p1Picks.slice() : [],
+      p2Picks: Array.isArray(d.p2Picks) ? d.p2Picks.slice() : [],
+      turn: Number.isFinite(d.turn) ? d.turn : 1
+    };
+  }
+
+  function startOnlineDraft() {
+    resetOnlineDraftState();
+    onlinePvp.matchMode = 'draft';
+    onlinePvp.draft.active = true;
+    onlinePvp.draft.pool = buildDraftPool(18);
+    onlinePvp.draft.turn = 1;
+    renderOnlineDraftState();
+    sendOnline({ type: 'DRAFT_INIT', pool: onlinePvp.draft.pool.slice(), turn: onlinePvp.draft.turn });
+    sendOnline({ type: 'DRAFT_STATE', state: draftStatePayload() });
+  }
+
+  function finishOnlineDraftIfReady() {
+    const d = onlinePvp.draft;
+    if (!d.active) return false;
+    if (d.p1Picks.length < 6 || d.p2Picks.length < 6) return false;
+
+    let team1 = [];
+    let team2 = [];
+    if (typeof buildTeamFromDraftKeys === 'function') {
+      team1 = buildTeamFromDraftKeys(d.p1Picks);
+      team2 = buildTeamFromDraftKeys(d.p2Picks);
+    } else {
+      const level = (typeof PVP_CONFIG !== 'undefined' && Number.isFinite(PVP_CONFIG.LEVEL)) ? PVP_CONFIG.LEVEL : 70;
+      team1 = d.p1Picks.map(k => new Pokemon(k, level, true));
+      team2 = d.p2Picks.map(k => new Pokemon(k, level, true));
+    }
+
+    startPvPMatch(team1, team2, 'ONLINE DRAFT', { mode: 'online', onlineLocalSide: 1 });
+    pvpState.online.awaitingLocalMove = true;
+    pvpState.online.statusText = 'Elige tu movimiento.';
+    onlinePvp.active = true;
+    onlinePvp.matchStarted = true;
+    sendOnline({
+      type: 'DRAFT_COMPLETE',
+      team1: JSON.parse(JSON.stringify(team1)),
+      team2: JSON.parse(JSON.stringify(team2))
+    });
+    resetOnlineDraftState();
+    const overlay = ensureOverlay();
+    overlay.style.display = 'none';
+    return true;
+  }
+
+  function makeRoundVfxPayload(p1Move, p2Move) {
+    return { p1Move: p1Move || null, p2Move: p2Move || null };
+  }
+
+  async function playGuestRoundVfx(vfx) {
+    if (!vfx) return;
+    const localIsP1 = (pvpState?.online?.localSide || 1) === 1;
+    const p1Slot = localIsP1 ? 'player-sprite-slot' : 'opponent-sprite-slot';
+    const p2Slot = localIsP1 ? 'opponent-sprite-slot' : 'player-sprite-slot';
+    const p1Zone = localIsP1 ? 'zone-player' : 'zone-opponent';
+    const p2Zone = localIsP1 ? 'zone-opponent' : 'zone-player';
+
+    const p1m = MOVES[vfx.p1Move];
+    const p2m = MOVES[vfx.p2Move];
+    if (p1m) {
+      try {
+        await animateAttack(p1Slot, localIsP1);
+        if (p1m.cat !== 'Est') {
+          await shootProjectile(p1m.tipo, p1Zone, p2Zone);
+          await animateDamage(p2Slot);
+        }
+      } catch {}
+    }
+    if (p2m) {
+      try {
+        await animateAttack(p2Slot, !localIsP1);
+        if (p2m.cat !== 'Est') {
+          await shootProjectile(p2m.tipo, p2Zone, p1Zone);
+          await animateDamage(p1Slot);
+        }
+      } catch {}
+    }
+  }
+
   function onDataMessage(ev) {
     let msg = null;
     try { msg = JSON.parse(ev.data); } catch { return; }
@@ -532,6 +695,56 @@
       return;
     }
 
+    if (msg.type === 'DRAFT_INIT') {
+      if (onlinePvp.role !== 'guest') return;
+      resetOnlineDraftState();
+      onlinePvp.matchMode = 'draft';
+      onlinePvp.draft.active = true;
+      onlinePvp.draft.pool = Array.isArray(msg.pool) ? msg.pool.slice() : [];
+      onlinePvp.draft.turn = Number.isFinite(msg.turn) ? msg.turn : 1;
+      renderOnlineDraftState();
+      return;
+    }
+
+    if (msg.type === 'DRAFT_STATE') {
+      if (onlinePvp.role !== 'guest') return;
+      const d = msg.state || {};
+      onlinePvp.draft.active = !!d.active;
+      onlinePvp.draft.pool = Array.isArray(d.pool) ? d.pool.slice() : [];
+      onlinePvp.draft.p1Picks = Array.isArray(d.p1Picks) ? d.p1Picks.slice() : [];
+      onlinePvp.draft.p2Picks = Array.isArray(d.p2Picks) ? d.p2Picks.slice() : [];
+      onlinePvp.draft.turn = Number.isFinite(d.turn) ? d.turn : 1;
+      renderOnlineDraftState();
+      return;
+    }
+
+    if (msg.type === 'DRAFT_COMPLETE') {
+      if (onlinePvp.role !== 'guest') return;
+      const team1 = Array.isArray(msg.team1) ? msg.team1 : [];
+      const team2 = Array.isArray(msg.team2) ? msg.team2 : [];
+      startPvPMatch(team1, team2, 'ONLINE DRAFT', { mode: 'online', onlineLocalSide: 2 });
+      onlinePvp.active = true;
+      onlinePvp.matchStarted = true;
+      pvpState.online.awaitingLocalMove = true;
+      pvpState.online.statusText = 'Elige tu movimiento.';
+      resetOnlineDraftState();
+      const ov = ensureOverlay();
+      ov.style.display = 'none';
+      return;
+    }
+
+    if (msg.type === 'DRAFT_PICK') {
+      if (onlinePvp.role !== 'host') return;
+      if (onlinePvp.matchMode !== 'draft' || !onlinePvp.draft.active) return;
+      const key = String(msg.key || '').trim();
+      if (!key) return;
+      if (!applyHostDraftPick(2, key)) return;
+      sendOnline({ type: 'DRAFT_STATE', state: draftStatePayload() });
+      renderOnlineDraftState();
+      finishOnlineDraftIfReady();
+      return;
+    }
+
     if (msg.type === 'MOVE') {
       if (onlinePvp.role === 'host') {
         onlinePvp.remoteMove = msg.moveKey;
@@ -542,14 +755,17 @@
 
     if (msg.type === 'ROUND_STATE') {
       if (onlinePvp.role !== 'guest') return;
-      if (typeof importPvPSnapshot === 'function') {
-        importPvPSnapshot(msg.snapshot);
-      }
-      pvpState.online.awaitingLocalMove = true;
-      pvpState.online.statusText = 'Elige tu movimiento.';
-      onlinePvp.localMove = null;
-      onlinePvp.remoteMove = null;
-      if (typeof renderPvP === 'function') renderPvP();
+      (async () => {
+        await playGuestRoundVfx(msg.vfx || null);
+        if (typeof importPvPSnapshot === 'function') {
+          importPvPSnapshot(msg.snapshot);
+        }
+        pvpState.online.awaitingLocalMove = true;
+        pvpState.online.statusText = 'Elige tu movimiento.';
+        onlinePvp.localMove = null;
+        onlinePvp.remoteMove = null;
+        if (typeof renderPvP === 'function') renderPvP();
+      })();
       return;
     }
 
@@ -568,17 +784,23 @@
       onlinePvp.connected = true;
       setLobbyMessage('<div style="font-size:.8rem; color:#4caf50;">Conexion establecida. Iniciando partida...</div>');
       if (onlinePvp.role === 'host') {
-        const t1 = randomOnlineTeam();
-        const t2 = randomOnlineTeam();
-        startPvPMatch(t1, t2, 'ONLINE', { mode: 'online', onlineLocalSide: 1 });
-        pvpState.online.awaitingLocalMove = true;
-        pvpState.online.statusText = 'Elige tu movimiento.';
-        onlinePvp.matchStarted = true;
-        onlinePvp.active = true;
-        sendOnline({ type: 'INIT_MATCH', team1: JSON.parse(JSON.stringify(t1)), team2: JSON.parse(JSON.stringify(t2)) });
+        if (onlinePvp.matchMode === 'draft') {
+          startOnlineDraft();
+        } else {
+          const t1 = randomOnlineTeam();
+          const t2 = randomOnlineTeam();
+          startPvPMatch(t1, t2, 'ONLINE', { mode: 'online', onlineLocalSide: 1 });
+          pvpState.online.awaitingLocalMove = true;
+          pvpState.online.statusText = 'Elige tu movimiento.';
+          onlinePvp.matchStarted = true;
+          onlinePvp.active = true;
+          sendOnline({ type: 'INIT_MATCH', team1: JSON.parse(JSON.stringify(t1)), team2: JSON.parse(JSON.stringify(t2)) });
+        }
       }
-      const overlay = ensureOverlay();
-      overlay.style.display = 'none';
+      if (onlinePvp.matchMode !== 'draft' || onlinePvp.role !== 'host') {
+        const overlay = ensureOverlay();
+        overlay.style.display = 'none';
+      }
     };
     dc.onmessage = onDataMessage;
     dc.onclose = () => {
@@ -591,13 +813,14 @@
     };
   }
 
-  async function createHostFlow() {
+  async function createHostFlow(mode = 'classic') {
     if (!isWebRtcAvailable()) {
       alert('WebRTC no disponible en este navegador.');
       return;
     }
     resetOnlineState();
     onlinePvp.role = 'host';
+    onlinePvp.matchMode = mode === 'draft' ? 'draft' : 'classic';
     const pc = new RTCPeerConnection({ iceServers: STUN_SERVERS });
     onlinePvp.pc = pc;
     bindPeerDiagnostics(pc);
@@ -687,6 +910,7 @@
 
     pvpState.p1.pendingMove = onlinePvp.localMove;
     pvpState.p2.pendingMove = onlinePvp.remoteMove;
+    onlinePvp.lastRoundVfx = makeRoundVfxPayload(onlinePvp.localMove, onlinePvp.remoteMove);
     pvpState.online.awaitingLocalMove = false;
     setStatusText('Resolviendo ronda...');
 
@@ -705,10 +929,11 @@
     }
 
     const snapshot = (typeof exportPvPSnapshot === 'function') ? exportPvPSnapshot() : null;
-    sendOnline({ type: 'ROUND_STATE', snapshot });
+    sendOnline({ type: 'ROUND_STATE', snapshot, vfx: onlinePvp.lastRoundVfx || null });
 
     onlinePvp.localMove = null;
     onlinePvp.remoteMove = null;
+    onlinePvp.lastRoundVfx = null;
     pvpState.online.awaitingLocalMove = true;
     setStatusText('Elige tu movimiento.');
   }
@@ -852,8 +1077,9 @@
     ov.style.display = 'none';
   };
 
-  window.onlinePvPHost = function onlinePvPHost() {
-    createHostFlow().catch(() => alert('No se pudo crear la oferta.'));
+  window.onlinePvPHost = function onlinePvPHost(mode) {
+    const selected = String(mode || 'classic');
+    createHostFlow(selected).catch(() => alert('No se pudo crear la oferta.'));
   };
 
   window.onlinePvPApplyAnswer = function onlinePvPApplyAnswer() {
@@ -902,6 +1128,28 @@
     if (!Number.isFinite(idx)) return;
     onlinePvp.scanCameraIdx = Math.max(0, Math.min(idx, Math.max(0, (onlinePvp.scanCameraOptions || []).length - 1)));
     startQrScanInto(onlinePvp.scanTargetTextareaId);
+  };
+
+  window.onlinePvPDraftPick = function onlinePvPDraftPick(key) {
+    if (!onlinePvp.connected || onlinePvp.matchMode !== 'draft' || !onlinePvp.draft.active) return;
+    const pick = String(key || '').trim();
+    if (!pick) return;
+
+    if (onlinePvp.role === 'host') {
+      if (!applyHostDraftPick(1, pick)) return;
+      sendOnline({ type: 'DRAFT_STATE', state: draftStatePayload() });
+      renderOnlineDraftState();
+      finishOnlineDraftIfReady();
+      return;
+    }
+
+    if (onlinePvp.role === 'guest') {
+      const d = onlinePvp.draft;
+      if (d.turn !== 2) return;
+      if (!Array.isArray(d.pool) || !d.pool.includes(pick)) return;
+      sendOnline({ type: 'DRAFT_PICK', key: pick });
+      setLobbyMessage('<div style="font-size:.8rem; color:#ffd54a;">Pick enviado. Esperando estado del host...</div>');
+    }
   };
 
   window.onlinePvPQrNext = function onlinePvPQrNext() {
