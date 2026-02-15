@@ -35,10 +35,10 @@
 
   function buildQrUrl(text) {
     const payload = encodeURIComponent(text || '');
-    return `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${payload}`;
+    return `https://api.qrserver.com/v1/create-qr-code/?size=340x340&ecc=M&margin=12&data=${payload}`;
   }
 
-  function buildSignalChunks(rawText, chunkSize = 700) {
+  function buildSignalChunks(rawText, chunkSize = 280) {
     const text = String(rawText || '');
     if (!text) return [];
     if (text.length <= chunkSize) return [text];
@@ -185,7 +185,7 @@
       </div>
       ${scanBtn}
       ${scanWarn}
-      ${showQr ? `<div style="display:flex; justify-content:center; margin-top:4px;"><img id="online-qr-img" alt="QR" src="${buildQrUrl(qrChunks[0] || '')}" style="width:190px; height:190px; border-radius:8px; border:1px solid rgba(255,255,255,.25); background:#fff;"></div>` : ''}
+      ${showQr ? `<div style="display:flex; justify-content:center; margin-top:4px;"><img id="online-qr-img" alt="QR" src="${buildQrUrl(qrChunks[0] || '')}" style="width:260px; height:260px; border-radius:8px; border:1px solid rgba(255,255,255,.25); background:#fff;"></div>` : ''}
       ${showQr ? qrControls : ''}
       ${extraHtml}
     `;
@@ -248,7 +248,7 @@
     box.style.gap = '6px';
     box.innerHTML = `
       <video id="online-qr-video" autoplay playsinline style="width:100%; max-height:220px; border-radius:8px; border:1px solid rgba(255,255,255,.2); background:#000;"></video>
-      <div id="online-qr-scan-status" style="font-size:.74rem; color:#9aa3c7;">Apunta al QR.</div>
+      <div id="online-qr-scan-status" style="font-size:.74rem; color:#9aa3c7;">Apunta al QR. Buscando...</div>
       <button class="btn-action" onclick="onlinePvPStopScan()">Detener escaneo</button>
     `;
     body.appendChild(box);
@@ -265,77 +265,67 @@
       let detector = null;
       if (hasBarcodeDetectorSupport()) {
         detector = new BarcodeDetector({ formats: ['qr_code'] });
-      } else {
-        await ensureJsQrLoaded();
       }
+      await ensureJsQrLoaded().catch(() => false);
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      const statusEl = document.getElementById('online-qr-scan-status');
+      let loops = 0;
+      const consumeRaw = rawText => {
+        const raw = String(rawText || '').trim();
+        if (!raw) return false;
+        const parsed = parseSignalChunk(raw);
+        const target = document.getElementById(textareaId);
+        if (parsed) {
+          if (!onlinePvp.scanChunkSession || onlinePvp.scanChunkSession.id !== parsed.id || onlinePvp.scanChunkSession.total !== parsed.total) {
+            onlinePvp.scanChunkSession = { id: parsed.id, total: parsed.total, parts: {} };
+          }
+          onlinePvp.scanChunkSession.parts[parsed.idx] = parsed.data;
+          if (statusEl) {
+            const count = Object.keys(onlinePvp.scanChunkSession.parts).length;
+            statusEl.innerText = `QR capturado ${count}/${onlinePvp.scanChunkSession.total}. Sigue escaneando...`;
+          }
+          const assembled = rebuildChunkedSignal(onlinePvp.scanChunkSession);
+          if (assembled) {
+            if (target) target.value = assembled;
+            if (statusEl) statusEl.innerText = 'Codigo completo leido.';
+            try { if (navigator.vibrate) navigator.vibrate(120); } catch {}
+            setTimeout(() => stopQrScan(), 120);
+            return true;
+          }
+          return false;
+        }
+        if (target) target.value = raw;
+        if (statusEl) statusEl.innerText = 'Codigo QR leido.';
+        try { if (navigator.vibrate) navigator.vibrate(120); } catch {}
+        setTimeout(() => stopQrScan(), 120);
+        return true;
+      };
       const tick = async () => {
         if (!onlinePvp.scanActive) return;
         try {
+          loops++;
+          if (statusEl && loops % 12 === 0) statusEl.innerText = 'Buscando QR...';
+
           if (detector) {
             const codes = await detector.detect(video);
             if (Array.isArray(codes) && codes[0]?.rawValue) {
-              const raw = String(codes[0].rawValue || '').trim();
-              const parsed = parseSignalChunk(raw);
-              const target = document.getElementById(textareaId);
-              if (parsed) {
-                if (!onlinePvp.scanChunkSession || onlinePvp.scanChunkSession.id !== parsed.id || onlinePvp.scanChunkSession.total !== parsed.total) {
-                  onlinePvp.scanChunkSession = { id: parsed.id, total: parsed.total, parts: {} };
-                }
-                onlinePvp.scanChunkSession.parts[parsed.idx] = parsed.data;
-                const statusEl = document.getElementById('online-qr-scan-status');
-                if (statusEl) {
-                  const count = Object.keys(onlinePvp.scanChunkSession.parts).length;
-                  statusEl.innerText = `QR capturado ${count}/${onlinePvp.scanChunkSession.total}. Sigue escaneando...`;
-                }
-                const assembled = rebuildChunkedSignal(onlinePvp.scanChunkSession);
-                if (assembled) {
-                  if (target) target.value = assembled;
-                  stopQrScan();
-                  return;
-                }
-              } else {
-                if (target) target.value = raw;
-                stopQrScan();
-                return;
-              }
+              if (consumeRaw(codes[0].rawValue)) return;
             }
-          } else if (ctx && typeof window.jsQR === 'function' && video.videoWidth > 0 && video.videoHeight > 0) {
+          }
+
+          if (ctx && typeof window.jsQR === 'function' && video.videoWidth > 0 && video.videoHeight > 0) {
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
             const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
             const result = window.jsQR(frame.data, canvas.width, canvas.height, { inversionAttempts: 'attemptBoth' });
             if (result && result.data) {
-              const raw = String(result.data || '').trim();
-              const parsed = parseSignalChunk(raw);
-              const target = document.getElementById(textareaId);
-              if (parsed) {
-                if (!onlinePvp.scanChunkSession || onlinePvp.scanChunkSession.id !== parsed.id || onlinePvp.scanChunkSession.total !== parsed.total) {
-                  onlinePvp.scanChunkSession = { id: parsed.id, total: parsed.total, parts: {} };
-                }
-                onlinePvp.scanChunkSession.parts[parsed.idx] = parsed.data;
-                const statusEl = document.getElementById('online-qr-scan-status');
-                if (statusEl) {
-                  const count = Object.keys(onlinePvp.scanChunkSession.parts).length;
-                  statusEl.innerText = `QR capturado ${count}/${onlinePvp.scanChunkSession.total}. Sigue escaneando...`;
-                }
-                const assembled = rebuildChunkedSignal(onlinePvp.scanChunkSession);
-                if (assembled) {
-                  if (target) target.value = assembled;
-                  stopQrScan();
-                  return;
-                }
-              } else {
-                if (target) target.value = raw;
-                stopQrScan();
-                return;
-              }
+              if (consumeRaw(result.data)) return;
             }
           }
         } catch {}
-        setTimeout(tick, 220);
+        setTimeout(tick, 180);
       };
       tick();
     } catch {
