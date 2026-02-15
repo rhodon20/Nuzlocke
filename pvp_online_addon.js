@@ -181,12 +181,21 @@
       <textarea id="${textareaId}" style="width:100%; min-height:120px; resize:vertical; background:#0f1631; color:#e8ecff; border:1px solid rgba(255,255,255,.2); border-radius:8px; padding:8px;">${value || ''}</textarea>
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
         <button class="btn-action" onclick="copyOnlineSignal('${textareaId}')">Copiar</button>
+        <button class="btn-action" onclick="pasteOnlineSignal('${textareaId}')">Pegar</button>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+        <button class="btn-action" onclick="shareOnlineSignal('${textareaId}')">Compartir</button>
+        <button class="btn-action" onclick="downloadOnlineSignal('${textareaId}')">Descargar TXT</button>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+        <button class="btn-action" onclick="uploadOnlineSignal('${textareaId}')">Cargar TXT</button>
         <button class="btn-action" onclick="${actionFnName}()">${actionLabel}</button>
       </div>
       ${scanBtn}
       ${scanWarn}
       ${showQr ? `<div style="display:flex; justify-content:center; margin-top:4px;"><img id="online-qr-img" alt="QR" src="${buildQrUrl(qrChunks[0] || '')}" style="width:260px; height:260px; border-radius:8px; border:1px solid rgba(255,255,255,.25); background:#fff;"></div>` : ''}
       ${showQr ? qrControls : ''}
+      <div style="font-size:.72rem; color:#9aa3c7;">Si el QR falla, usa Compartir o Copiar/Pegar.</div>
       ${extraHtml}
     `;
   }
@@ -645,6 +654,18 @@
     host.appendChild(btn);
   }
 
+  function ensureSignalFileInput() {
+    let input = document.getElementById('online-signal-file');
+    if (input) return input;
+    input = document.createElement('input');
+    input.id = 'online-signal-file';
+    input.type = 'file';
+    input.accept = '.txt,text/plain';
+    input.style.display = 'none';
+    document.body.appendChild(input);
+    return input;
+  }
+
   window.copyOnlineSignal = function copyOnlineSignal(id) {
     const el = document.getElementById(id);
     if (!el) return;
@@ -653,6 +674,68 @@
     if (navigator.clipboard?.writeText) {
       navigator.clipboard.writeText(txt).catch(() => {});
     }
+  };
+
+  window.pasteOnlineSignal = async function pasteOnlineSignal(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    try {
+      if (!navigator.clipboard?.readText) throw new Error('clipboard');
+      const txt = await navigator.clipboard.readText();
+      if (txt) el.value = txt.trim();
+    } catch {
+      alert('No se pudo pegar desde portapapeles.');
+    }
+  };
+
+  window.shareOnlineSignal = async function shareOnlineSignal(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const txt = (el.value || '').trim();
+    if (!txt) return;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: 'PvP Online Signal', text: txt });
+      } else {
+        await window.copyOnlineSignal(id);
+        alert('No hay share nativo. Codigo copiado al portapapeles.');
+      }
+    } catch {}
+  };
+
+  window.downloadOnlineSignal = function downloadOnlineSignal(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const txt = (el.value || '').trim();
+    if (!txt) return;
+    const blob = new Blob([txt], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'pvp-signal.txt';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  window.uploadOnlineSignal = function uploadOnlineSignal(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const input = ensureSignalFileInput();
+    input.onchange = async (ev) => {
+      const f = ev.target.files && ev.target.files[0];
+      if (!f) return;
+      try {
+        const txt = await f.text();
+        el.value = String(txt || '').trim();
+      } catch {
+        alert('No se pudo leer el archivo.');
+      } finally {
+        input.value = '';
+      }
+    };
+    input.click();
   };
 
   window.closeOnlinePvPOverlay = function closeOnlinePvPOverlay() {
