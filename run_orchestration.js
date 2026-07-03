@@ -69,7 +69,6 @@ function getTeamAverageLevel() {
 }
 
 function startBattle() {
-  if (typeof recordTelemetryBattle === 'function') recordTelemetryBattle('start');
   const rogueCfg = (state.gameMode === 'roguerun' && typeof window !== 'undefined')
     ? (window.__rogueRunBattleConfig || null)
     : null;
@@ -118,6 +117,10 @@ function startBattle() {
     opponent.hp = opponent.maxHp;
   } else {
     opponent.isMiniBoss = false;
+  }
+
+  if (typeof recordTelemetryBattle === 'function') {
+    recordTelemetryBattle('start', { player: state.team[state.activeIdx], opponent });
   }
 
   const evt = maybeSelectRunEvent();

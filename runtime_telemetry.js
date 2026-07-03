@@ -1,6 +1,6 @@
 function createRunTelemetry() {
   return {
-    version: 1,
+    version: 2,
     battlesStarted: 0,
     battlesWon: 0,
     battlesLost: 0,
@@ -9,7 +9,11 @@ function createRunTelemetry() {
     damageDealt: 0,
     damageReceived: 0,
     items: { potions: 0, balls: 0, switches: 0 },
-    moves: {}
+    moves: {},
+    species: {},
+    opponents: {},
+    controlTurns: { inflicted: {}, suffered: {} },
+    currentBattle: null
   };
 }
 
@@ -18,6 +22,11 @@ function ensureRunTelemetry() {
   const telemetry = state.telemetry;
   telemetry.items = { potions: 0, balls: 0, switches: 0, ...(telemetry.items || {}) };
   telemetry.moves = telemetry.moves && typeof telemetry.moves === 'object' ? telemetry.moves : {};
+  telemetry.species = telemetry.species && typeof telemetry.species === 'object' ? telemetry.species : {};
+  telemetry.opponents = telemetry.opponents && typeof telemetry.opponents === 'object' ? telemetry.opponents : {};
+  telemetry.controlTurns = telemetry.controlTurns && typeof telemetry.controlTurns === 'object' ? telemetry.controlTurns : {};
+  telemetry.controlTurns.inflicted = telemetry.controlTurns.inflicted && typeof telemetry.controlTurns.inflicted === 'object' ? telemetry.controlTurns.inflicted : {};
+  telemetry.controlTurns.suffered = telemetry.controlTurns.suffered && typeof telemetry.controlTurns.suffered === 'object' ? telemetry.controlTurns.suffered : {};
   ['battlesStarted','battlesWon','battlesLost','turns','damageDealt','damageReceived'].forEach(key => {
     telemetry[key] = Number.isFinite(telemetry[key]) ? Math.max(0, telemetry[key]) : 0;
   });
@@ -32,6 +41,22 @@ function normalizeRunTelemetry(raw) {
   });
   normalized.items = { ...normalized.items, ...(raw.items || {}) };
   normalized.battleActive = !!raw.battleActive;
+  ['species', 'opponents'].forEach(group => {
+    Object.entries(raw[group] || {}).forEach(([key, value]) => {
+      if (!value || typeof value !== 'object') return;
+      normalized[group][key] = {
+        battles: Math.max(0, Number(value.battles) || 0),
+        wins: Math.max(0, Number(value.wins) || 0),
+        losses: Math.max(0, Number(value.losses) || 0)
+      };
+    });
+  });
+  ['inflicted', 'suffered'].forEach(side => {
+    Object.entries(raw.controlTurns?.[side] || {}).forEach(([key, value]) => {
+      normalized.controlTurns[side][key] = Math.max(0, Number(value) || 0);
+    });
+  });
+  normalized.currentBattle = raw.currentBattle && typeof raw.currentBattle === 'object' ? raw.currentBattle : null;
   Object.entries(raw.moves || {}).forEach(([key, value]) => {
     if (!MOVES[key] || !value || typeof value !== 'object') return;
     normalized.moves[key] = {
@@ -48,23 +73,67 @@ function resetRunTelemetry() {
   return state.telemetry;
 }
 
-function recordTelemetryBattle(result) {
+function isTelemetryEnabled() {
+  return !(typeof pvpState !== 'undefined' && pvpState?.active);
+}
+
+function telemetrySpeciesName(mon) {
+  return String(mon?.speciesKey || mon?.name || 'Desconocido');
+}
+
+function incrementTelemetryResult(group, key, result) {
+  if (!key) return;
+  const entry = group[key] || { battles: 0, wins: 0, losses: 0 };
+  if (result === 'start') entry.battles++;
+  if (result === 'win') entry.wins++;
+  if (result === 'loss') entry.losses++;
+  group[key] = entry;
+}
+
+function recordTelemetryBattle(result, context = {}) {
+  if (!isTelemetryEnabled()) return;
   const telemetry = ensureRunTelemetry();
-  if (result === 'start') { telemetry.battlesStarted++; telemetry.battleActive = true; }
-  if (result === 'win' && telemetry.battleActive) { telemetry.battlesWon++; telemetry.battleActive = false; }
-  if (result === 'loss' && telemetry.battleActive) { telemetry.battlesLost++; telemetry.battleActive = false; }
+  if (result === 'start') {
+    telemetry.battlesStarted++;
+    telemetry.battleActive = true;
+    telemetry.currentBattle = {
+      player: telemetrySpeciesName(context.player),
+      opponent: telemetrySpeciesName(context.opponent)
+    };
+    incrementTelemetryResult(telemetry.species, telemetry.currentBattle.player, 'start');
+    incrementTelemetryResult(telemetry.opponents, telemetry.currentBattle.opponent, 'start');
+  }
+  if ((result === 'win' || result === 'loss') && telemetry.battleActive) {
+    if (result === 'win') telemetry.battlesWon++;
+    else telemetry.battlesLost++;
+    incrementTelemetryResult(telemetry.species, telemetry.currentBattle?.player, result);
+    incrementTelemetryResult(telemetry.opponents, telemetry.currentBattle?.opponent, result);
+    telemetry.battleActive = false;
+    telemetry.currentBattle = null;
+  }
 }
 
 function recordTelemetryTurn(action = 'move') {
+  if (!isTelemetryEnabled()) return;
   const telemetry = ensureRunTelemetry();
   telemetry.turns++;
   if (action === 'potion') telemetry.items.potions++;
   if (action === 'ball') telemetry.items.balls++;
   if (action === 'switch') telemetry.items.switches++;
+  const player = state.team?.[state.activeIdx];
+  const samples = [
+    [opponent, telemetry.controlTurns.inflicted],
+    [player, telemetry.controlTurns.suffered]
+  ];
+  samples.forEach(([mon, bucket]) => {
+    if (!mon) return;
+    if (mon.status) bucket[mon.status] = (bucket[mon.status] || 0) + 1;
+    if ((mon.confusionTurns || 0) > 0) bucket.CON = (bucket.CON || 0) + 1;
+  });
 }
 
 function recordTelemetryMove(moveKey, isPlayer, outcome = {}) {
-  if (typeof pvpState !== 'undefined' && pvpState?.active) return;
+  if (!isTelemetryEnabled()) return;
   if (!moveKey || moveKey === 'Recharge') return;
   const telemetry = ensureRunTelemetry();
   const damage = Math.max(0, Number(outcome.damage) || 0);
@@ -86,6 +155,9 @@ function getTelemetrySummary(telemetry = state.telemetry) {
   const favorite = moves.sort((a, b) => (b[1]?.uses || 0) - (a[1]?.uses || 0))[0] || null;
   const totalAttempts = moves.reduce((sum, [, value]) => sum + (value?.attempts || 0), 0);
   const totalHits = moves.reduce((sum, [, value]) => sum + (value?.hits || 0), 0);
+  const bestEntry = group => Object.entries(group || {}).sort((a, b) => (b[1]?.battles || 0) - (a[1]?.battles || 0))[0] || null;
+  const topSpecies = bestEntry(telemetry.species);
+  const topOpponent = bestEntry(telemetry.opponents);
   return {
     battles: telemetry.battlesStarted || 0,
     wins: telemetry.battlesWon || 0,
@@ -96,6 +168,13 @@ function getTelemetrySummary(telemetry = state.telemetry) {
     accuracyPct: totalAttempts > 0 ? Math.round((totalHits / totalAttempts) * 100) : 0,
     favoriteMove: favorite ? favorite[0] : null,
     favoriteUses: favorite ? favorite[1].uses || 0 : 0,
+    averageTurns: telemetry.battlesStarted > 0 ? Math.round((telemetry.turns / telemetry.battlesStarted) * 10) / 10 : 0,
+    topSpecies: topSpecies ? { name: topSpecies[0], ...topSpecies[1] } : null,
+    topOpponent: topOpponent ? { name: topOpponent[0], ...topOpponent[1] } : null,
+    controlTurns: {
+      inflicted: { ...(telemetry.controlTurns?.inflicted || {}) },
+      suffered: { ...(telemetry.controlTurns?.suffered || {}) }
+    },
     items: { potions: 0, balls: 0, switches: 0, ...(telemetry.items || {}) }
   };
 }

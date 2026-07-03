@@ -86,6 +86,14 @@
 - Added telemetry aggregation regression (harness total: 28 checks).
 - Browser audit verified real move damage aggregation and history persistence (passed).
 
+## Balance Analytics - Phase 8 (2026-07-03)
+- Upgraded local run telemetry to schema version 2 with backward-compatible normalization.
+- Added battle participation and result aggregation for player species and encountered opponents.
+- Added average turns per battle and control-status uptime for sleep, paralysis, freeze, burn, poison and confusion.
+- Extended completed-run details with the most-used species, most-frequent opponent and readable control summaries.
+- Kept PvP excluded and guarded battle outcomes so duplicate win/loss callbacks cannot inflate results.
+- Expanded the lightweight harness to 33 regression checks.
+
 ## Current Architecture
 - Stack: single-page app in `index.html` + data/feature addons in separate JS files.
 - Core game loop and UI remain in `index.html`, pero el motor de combate ya está parcialmente modularizado.

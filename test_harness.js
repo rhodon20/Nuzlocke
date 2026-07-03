@@ -329,7 +329,10 @@ function runTests() {
 
   // 28) Run telemetry must aggregate turns, accuracy, damage and favorites
   resetRunTelemetry();
-  recordTelemetryBattle('start');
+  recordTelemetryBattle('start', { player: { name:'Bulbasaur' }, opponent: { name:'Rattata', status:'SLP' } });
+  global.opponent = { name:'Rattata', status:'SLP', confusionTurns:0 };
+  state.team = [{ name:'Bulbasaur', status:null, confusionTurns:0 }];
+  state.activeIdx = 0;
   recordTelemetryTurn('potion');
   recordTelemetryMove('Tackle', true, { resolved:true, damage:12, hits:1 });
   recordTelemetryMove('Tackle', true, { missed:true });
@@ -341,8 +344,12 @@ function runTests() {
   assertEqual(telemetrySummary.accuracyPct, 50, 'telemetry accuracy should use checked attempts');
   assertEqual(telemetrySummary.damageDealt, 12, 'telemetry should aggregate player damage');
   assertEqual(telemetrySummary.favoriteMove, 'Tackle', 'telemetry should identify favorite move');
+  assertEqual(telemetrySummary.averageTurns, 1, 'telemetry should calculate average battle length');
+  assertEqual(telemetrySummary.topSpecies.name, 'Bulbasaur', 'telemetry should aggregate player species');
+  assertEqual(telemetrySummary.topOpponent.name, 'Rattata', 'telemetry should aggregate opponents');
+  assertEqual(telemetrySummary.controlTurns.inflicted.SLP, 1, 'telemetry should sample inflicted control uptime');
 
-  console.log('All tests passed (28/28).');
+  console.log('All tests passed (33/33).');
 }
 
 try {

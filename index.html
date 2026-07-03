@@ -1064,8 +1064,13 @@ function openRunDetails(index) {
       '', 'Balance de la run',
       `Combates: ${t.battles || 0} | Victorias: ${t.wins || 0} | Derrotas: ${t.losses || 0}`,
       `Turnos: ${t.turns || 0} | Precisión: ${t.accuracyPct || 0}%`,
+      `Media por combate: ${t.averageTurns || 0} turnos`,
       `Daño causado: ${t.damageDealt || 0} | Recibido: ${t.damageReceived || 0}`,
       `Movimiento más usado: ${t.favoriteMove ? `${MOVES[t.favoriteMove]?.nombre || t.favoriteMove} (${t.favoriteUses || 0})` : 'N/D'}`,
+      `Pokémon más utilizado: ${t.topSpecies ? `${t.topSpecies.name} (${t.topSpecies.battles} combates, ${t.topSpecies.wins} victorias)` : 'N/D'}`,
+      `Rival más frecuente: ${t.topOpponent ? `${t.topOpponent.name} (${t.topOpponent.battles} encuentros)` : 'N/D'}`,
+      `Control causado: ${formatControlTelemetry(t.controlTurns?.inflicted)}`,
+      `Control sufrido: ${formatControlTelemetry(t.controlTurns?.suffered)}`,
       `Objetos: ${t.items?.potions || 0} pociones, ${t.items?.balls || 0} Poké Balls, ${t.items?.switches || 0} cambios`
     );
   }
@@ -1353,6 +1358,13 @@ function initGame() {
   renderRunHistory();
   refreshSeedUiState();
   runPluginHook('onInitGame', { state });
+}
+
+function formatControlTelemetry(values) {
+  const labels = { SLP: 'Sueño', PAR: 'Parálisis', FRZ: 'Congelación', BRN: 'Quemadura', PSN: 'Veneno', CON: 'Confusión' };
+  const entries = Object.entries(values || {}).filter(([, turns]) => Number(turns) > 0);
+  if (!entries.length) return 'ninguno';
+  return entries.sort((a, b) => b[1] - a[1]).map(([key, turns]) => `${labels[key] || key} ${turns}t`).join(', ');
 }
 
 
