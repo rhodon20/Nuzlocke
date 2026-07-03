@@ -128,6 +128,46 @@ function applySingleEffect(attacker, defender, effect, turnMeta = {}) {
       log(`Púas Tóxicas colocadas en ${turnMeta.attackerSide ? 'el lado rival' : 'tu lado'} (${targetSide.toxicSpikesLayers}/2).`);
       return;
     }
+    if (effect === 'SELF_CON') {
+      if (canInflictConfusion(attacker)) {
+        attacker.confusionTurns = 2 + Math.floor(gameRandom() * 3);
+        attacker.confusionShieldTurns = 2;
+        log(`${attacker.name} quedó confundido por el esfuerzo.`);
+      }
+      return;
+    }
+    if (effect === 'TRANSFORM') {
+      if (attacker.transformBackup) {
+        log(`${attacker.name} ya está transformado.`);
+        return;
+      }
+      attacker.transformBackup = {
+        types: Array.isArray(attacker.types) ? attacker.types.slice() : [],
+        atk: attacker.atk, def: attacker.def, spa: attacker.spa, spd: attacker.spd, spe: attacker.spe,
+        moves: Array.isArray(attacker.moves) ? attacker.moves.slice() : [],
+        ability: attacker.ability || null
+      };
+      attacker.types = Array.isArray(defender.types) ? defender.types.slice() : attacker.types;
+      ['atk','def','spa','spd','spe'].forEach(stat => { attacker[stat] = defender[stat]; });
+      attacker.moves = Array.isArray(defender.moves) ? defender.moves.filter(key => MOVES[key] && !MOVES[key].internalAction).slice(0, 4) : attacker.moves;
+      attacker.ability = defender.ability || null;
+      log(`${attacker.name} se transformó en ${defender.name}.`);
+      renderAll();
+      return;
+    }
+    if (effect === 'SKETCH') {
+      const copiedKey = defender.lastUsedMoveKey;
+      if (!copiedKey || !MOVES[copiedKey] || MOVES[copiedKey].internalAction || MOVES[copiedKey].emergency) {
+        log(`${attacker.name} no pudo copiar ningún movimiento.`);
+        return;
+      }
+      const sketchIndex = attacker.moves.indexOf('Sketch');
+      if (sketchIndex >= 0) attacker.moves[sketchIndex] = copiedKey;
+      else if (!attacker.moves.includes(copiedKey)) attacker.moves = [...attacker.moves.slice(0, 3), copiedKey];
+      log(`${attacker.name} copió ${MOVES[copiedKey].nombre}.`);
+      renderAll();
+      return;
+    }
     if (effect === 'CLEAR_OWN_HAZARDS') {
       const ownSide = getSideFieldState(!!turnMeta.attackerSide);
       const removed = clearSideHazards(ownSide, { clearScreens: false });

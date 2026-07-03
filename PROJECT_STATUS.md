@@ -1,5 +1,91 @@
 ﻿# Project Status - Nuzlocke Web App
 
+## Polish Pass - Phase 1 (2026-07-03)
+- Fixed missing `index.css` request and added a no-network Anime.js fallback.
+- Hardened run-history rendering: user-provided seeds are now rendered with `textContent`.
+- Added PvP Online round-log synchronization, including final-round state/log delivery.
+- Fixed online combat-analysis orientation using `online.localSide`.
+- Reorganized secondary modes under an accessible "Más modos de juego" section.
+- Improved baseline accessibility: browser zoom, visible keyboard focus, live combat log and dialog semantics.
+- Hid the empty battle HUD before a run starts and fixed mobile sizing/seed-control overflow.
+- Started the battle-scene visual pass with layered biome backgrounds and biome-aware platforms; sprites remain unchanged.
+
+## Polish Pass - Phase 2 (2026-07-03)
+- Added a state-driven battle presentation layer in `battle_ui.js`.
+- Added animated weather overlays and turn counters for rain, sun, sandstorm and hail.
+- Added visible run-event, screen and entry-hazard indicators for both sides.
+- Added volatile-state badges for confusion, shields, Heal Block, Disable, Taunt, Perish Song, Leech Seed and Protect.
+- Added duration display for sleep/freeze and dedicated cooldown badges on move buttons.
+- Improved battle-card spacing and fixed the game shell against mobile viewport overflow.
+- Added reduced-motion behavior for ambient and idle animations.
+
+## Gameplay Reliability - Phase 3 (2026-07-03)
+- Fixed Normal-mode starter filtering (`spawnTier` was incorrectly read as `tier`).
+- Initial move generation now guarantees at least one damaging move in normal and randomized modes.
+- Added emergency move `Combate` (internal key `Struggle`) when cooldown, Disable or Taunt leaves no selectable move.
+- `Combate` does not occupy a move slot and is excluded from random learning and PvP move generation.
+- AI and players share the same emergency-move availability rule across PvE and PvP.
+- Potion, Poké Ball and voluntary-switch turns now advance the active Pokémon's cooldowns.
+- Save migration repairs legacy Pokémon with only invalid or non-damaging moves.
+- Added harness regressions for safe initial moves, emergency fallback and non-move cooldown advancement.
+
+## Environment Transparency - Phase 4 (2026-07-03)
+- Added an "Entorno de combate" section to the stats/info modal.
+- The modal now explains the active run event, weather duration/effect, screens and entry hazards for both sides.
+- Added distinct visual accents for Luna Roja, Niebla Mística and Brisa Vital in the battle scene.
+- Clarified Brisa Vital's exact healing value (1/16 max HP per turn).
+- Added environment regressions for global damage, accuracy and end-turn healing modifiers.
+- PvP Online snapshots now synchronize `battleField` so weather/screens/hazards match on host and guest.
+- PvP snapshot Pokémon are rehydrated as real `Pokemon` instances, preventing stats-modal failures on guests.
+- Improved info-modal keyboard behavior, focus restoration and mobile sizing.
+
+## Catalog Consistency - Phase 5 (2026-07-03)
+- Completed all 162 move references currently used by the species catalog (zero missing definitions).
+- Normalized move type names against `TYPE_CHART`; unaccented Psychic/Electric entries now receive correct STAB, effectiveness and UI colors.
+- Added compatible definitions for 62 previously missing damaging/support moves instead of silently dropping them from Pokémon movesets.
+- Fixed `Outrage`: its simplified confusion drawback now affects the user instead of the target; AI valuation includes the drawback.
+- Fixed `Reversal` having zero power without variable-power engine support (temporarily normalized to power 80).
+- Added catalog audits for missing references, invalid types/categories and damaging moves without power.
+- Added a regression for self-confusion targeting (harness total: 19 checks).
+- Advanced move behaviors still simplified at that milestone: recoil, drain, charging turns, OHKO, Transform/Sketch/Metronome and variable-power formulas.
+
+## Advanced Moves - Phase 6A (2026-07-03)
+- Added generic multi-hit resolution with deterministic 2-5 hit distribution and fixed-hit support.
+- Each hit now rolls damage/critical independently and the sequence stops when the target faints.
+- Enabled multi-hit behavior for Pin Missile, Barrage, Comet Punch, Double Kick, Fury Attack, Fury Swipes, Spike Cannon and Twineedle.
+- Added Fury Swipes to Sandshrew, Furret and Aipom for visible early/mid-run multi-hit strategies.
+- Added generic consecutive-power chains with persisted per-Pokémon state.
+- Rollout doubles from power 30 up to five stacks; Fury Cutter doubles up to four stacks.
+- Chains reset on miss, Protect, immunity, move change, switch, faint or battle reset.
+- Move buttons expose `Golpes 2-5`, fixed hits or chain multiplier; active chains appear in the combat HUD.
+- AI evaluates expected multi-hit damage and the next chained power tier.
+- Added helper regressions and a browser execution audit for real multi-hit damage plus two-step Rollout chaining (passed).
+- Remaining advanced block: recoil/drain, charging/recharge, OHKO and special-copy/transform semantics.
+
+## Advanced Moves - Phase 6B (2026-07-03)
+- Added damage-based draining for Absorb, Mega Drain, Giga Drain and Leech Life.
+- Added recoil costs for Double-Edge, Brave Bird, Submission and Take Down.
+- Added near-total HP costs for Explosion/Self-Destruct; self-costs are intentionally non-lethal (minimum 1 HP) to avoid unresolved double-KO flows.
+- Added one-turn preparation for Solar Beam, Dig, Fly and Sky Attack; sun skips Solar Beam preparation.
+- Added mandatory recharge turns for Hyper Beam with dedicated UI/AI action.
+- Added level-aware OHKO behavior for Horn Drill and low-HP variable power for Reversal.
+- Added functional Metronome random move invocation, temporary Transform copying/restoration and permanent Sketch move copying.
+- Charge/recharge/transform state is persisted, synchronized through PvP snapshots and cleared safely on switch/faint/battle reset.
+- AI now values drain, recoil risk, HP cost, charge/recharge tempo, OHKO odds, Transform, Sketch and Metronome.
+- Browser execution audit covered drain, recoil, charge, recharge, OHKO, Transform, Sketch and Metronome (passed).
+- Harness expanded to 27 regression checks.
+
+## Balance Telemetry - Phase 7 (2026-07-03)
+- Added versioned, local-only run telemetry in `runtime_telemetry.js` (no external transmission).
+- Tracks battles started/won/lost, player turns, damage dealt/received and potion/ball/switch usage.
+- Tracks player move usage, checked accuracy, misses, total damage and multi-hit counts.
+- PvP is excluded from run telemetry to avoid contaminating PvE balance data.
+- Telemetry persists through save migration and is normalized against malformed/legacy payloads.
+- Completed-run history now stores and displays a compact balance summary and favorite move.
+- Run-log export embeds the latest telemetry summary for offline analysis.
+- Added telemetry aggregation regression (harness total: 28 checks).
+- Browser audit verified real move damage aggregation and history persistence (passed).
+
 ## Current Architecture
 - Stack: single-page app in `index.html` + data/feature addons in separate JS files.
 - Core game loop and UI remain in `index.html`, pero el motor de combate ya está parcialmente modularizado.

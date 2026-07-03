@@ -13,7 +13,7 @@
             font-weight: bold; cursor: pointer; display: flex;
             align-items: center; justify-content: center;
             box-shadow: 0 2px 5px rgba(0,0,0,0.5);
-            margin-left: 10px;
+            margin-left: 4px;
         }
         #info-modal {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -23,7 +23,7 @@
         }
         #info-content {
             background: #111938; border: 2px solid #00c6d7;
-            width: 95%; max-width: 500px; max-height: 90vh;
+            width: min(500px, calc(100vw - 20px)); min-width: 0; max-height: 90vh;
             border-radius: 12px; padding: 15px;
             overflow-y: auto; color: #e8ecff;
             box-shadow: 0 0 20px rgba(0,198,215,0.3);
@@ -42,7 +42,8 @@
         /* GRID SYSTEM */
         .stat-grid {
             display: grid;
-            grid-template-columns: 1.2fr 1fr 1fr 1fr; /* Nombres | Base | Hab | Final */
+            grid-template-columns: minmax(70px,1.2fr) repeat(3,minmax(42px,1fr)); /* Nombres | Base | Hab | Final */
+            min-width: 0;
             gap: 5px;
             font-size: 0.8rem;
             margin-top: 10px;
@@ -63,9 +64,15 @@
         .final-stage-neg { color: #e57373; font-weight:bold; }
         
         .ability-desc { font-style: italic; font-size: 0.8rem; color: #aaa; margin-top: 2px; margin-bottom: 8px; }
+        .environment-grid { display:grid; gap:7px; margin-top:8px; }
+        .environment-item { background:rgba(255,255,255,.045); border-left:3px solid #00c6d7; border-radius:5px; padding:7px 8px; }
+        .environment-item strong { display:block; color:#e8ecff; font-size:.84rem; margin-bottom:2px; }
+        .environment-item span { color:#b6bfdc; font-size:.76rem; line-height:1.35; }
+        .environment-empty { color:#7f89aa; font-size:.78rem; }
         .close-info {
             position: absolute; top: 10px; right: 10px;
             background: transparent; border: none; color: #ff6b6b;
+            width:36px; height:36px; padding:0; border-radius:50%;
             font-size: 1.5rem; cursor: pointer;
         }
     `;
@@ -78,6 +85,8 @@
             const btn = document.createElement('button');
             btn.id = 'btn-info';
             btn.innerHTML = 'ℹ️';
+            btn.title = 'Ver estadísticas y entorno de combate';
+            btn.setAttribute('aria-label', 'Abrir análisis de combate');
             btn.onclick = toggleInfoModal;
             teamBar.appendChild(btn);
         }
@@ -86,41 +95,65 @@
 
     // 3. LOGICA MODAL
     let isInfoOpen = false;
+    let previousFocus = null;
 
     function createInfoModal() {
         const div = document.createElement('div');
         div.id = 'info-modal';
         div.innerHTML = `
-            <div id="info-content">
-                <button class="close-info" onclick="toggleInfoModal()">×</button>
-                <h2 class="info-header">Análisis de Combate</h2>
+            <div id="info-content" role="dialog" aria-modal="true" aria-labelledby="info-title">
+                <button class="close-info" onclick="toggleInfoModal()" aria-label="Cerrar análisis">×</button>
+                <h2 class="info-header" id="info-title">Análisis de Combate</h2>
                 <div id="info-dynamic-data"></div>
             </div>
         `;
         document.body.appendChild(div);
+        div.addEventListener('click', event => {
+            if (event.target === div) toggleInfoModal();
+        });
     }
 
     window.toggleInfoModal = function() {
         const modal = document.getElementById('info-modal');
         isInfoOpen = !isInfoOpen;
         modal.style.display = isInfoOpen ? 'flex' : 'none';
-        if (isInfoOpen) updateInfoData();
+        if (isInfoOpen) {
+            previousFocus = document.activeElement;
+            updateInfoData();
+            modal.querySelector('.close-info')?.focus();
+        } else if (previousFocus && typeof previousFocus.focus === 'function') {
+            previousFocus.focus();
+        }
     };
+
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape' && isInfoOpen) toggleInfoModal();
+    });
 
     // 4. ACTUALIZACIÓN DE DATOS
     function updateInfoData() {
         if (!isInfoOpen) return;
         
-        let pMon, oMon;
+        let pMon, oMon, localIsP1 = true;
         // Detección de entorno (PvP o Normal)
         if (typeof pvpState !== 'undefined' && pvpState.active) {
+            if (pvpState.mode === 'online') {
+                const localSide = pvpState.online && pvpState.online.localSide === 2 ? 2 : 1;
+                localIsP1 = localSide === 1;
+                const local = localSide === 2 ? pvpState.p2 : pvpState.p1;
+                const remote = localSide === 2 ? pvpState.p1 : pvpState.p2;
+                pMon = local.team[local.activeIdx];
+                oMon = remote.team[remote.activeIdx];
+            } else {
             const phase = pvpState.turnPhase;
+            localIsP1 = phase === 0 || phase === 2;
             if (phase === 0 || phase === 2) { 
                 pMon = pvpState.p1.team[pvpState.p1.activeIdx];
                 oMon = pvpState.p2.team[pvpState.p2.activeIdx];
             } else { 
                 pMon = pvpState.p2.team[pvpState.p2.activeIdx];
                 oMon = pvpState.p1.team[pvpState.p1.activeIdx];
+            }
             }
         } else {
             if (!state || !state.team || !opponent) return;
@@ -132,10 +165,48 @@
 
         const container = document.getElementById('info-dynamic-data');
         container.innerHTML = `
+            ${renderEnvironmentSection(localIsP1)}
             ${renderMonTable(oMon, "Rival")}
             <div style="text-align:center; font-size:1.2rem; margin:10px 0; opacity:0.5;">⚔️ VS ⚔️</div>
             ${renderMonTable(pMon, "Tu Pokémon")}
         `;
+    }
+
+    function describeSideField(side) {
+        const effects = [];
+        if ((side?.reflectTurns || 0) > 0) effects.push(`Reflejo (${side.reflectTurns}): reduce un 50% el daño físico recibido.`);
+        if ((side?.lightScreenTurns || 0) > 0) effects.push(`Pantalla Luz (${side.lightScreenTurns}): reduce un 50% el daño especial recibido.`);
+        if ((side?.spikesLayers || 0) > 0) effects.push(`Púas ×${side.spikesLayers}: dañan al entrar a Pokémon que no sean Volador.`);
+        if ((side?.toxicSpikesLayers || 0) > 0) effects.push(`Púas Tóxicas ×${side.toxicSpikesLayers}: envenenan al entrar a Pokémon en tierra.`);
+        if (side?.stealthRock) effects.push('Trampa Rocas: causa daño de tipo Roca al entrar.');
+        return effects;
+    }
+
+    function renderEnvironmentSection(localIsP1) {
+        if (typeof battleField === 'undefined') return '';
+        const items = [];
+        const event = battleField.runEvent;
+        if (event) items.push({ title: `Evento · ${event.label}`, desc: event.desc || 'Modificador activo durante este combate.' });
+
+        const weather = battleField.weather || {};
+        const weatherDescriptions = {
+            RAIN: 'Lluvia: Agua causa ×1,5 de daño y Fuego ×0,5.',
+            SUN: 'Sol: Fuego causa ×1,5 de daño y Agua ×0,5.',
+            SAND: 'Tormenta de arena: resta 1/16 de PS máximos por turno, salvo a Roca, Tierra y Acero.',
+            HAIL: 'Granizo: resta 1/16 de PS máximos por turno, salvo a Pokémon de Hielo.'
+        };
+        if (weather.type && weather.turns > 0) {
+            items.push({ title: `Clima · ${weather.turns} turnos`, desc: weatherDescriptions[weather.type] || weather.type });
+        }
+
+        const mySide = localIsP1 ? battleField.player : battleField.opponent;
+        const rivalSide = localIsP1 ? battleField.opponent : battleField.player;
+        describeSideField(mySide).forEach(desc => items.push({ title: 'Tu campo', desc }));
+        describeSideField(rivalSide).forEach(desc => items.push({ title: 'Campo rival', desc }));
+        const content = items.length
+            ? items.map(item => `<div class="environment-item"><strong>${item.title}</strong><span>${item.desc}</span></div>`).join('')
+            : '<div class="environment-empty">No hay modificadores ambientales activos.</div>';
+        return `<div class="info-section"><h4>Entorno de combate</h4><div class="environment-grid">${content}</div></div>`;
     }
 
     function renderMonTable(mon, title) {
@@ -160,10 +231,10 @@
             const baseVal = mon[s.id]; 
 
             // 2. Valor Final (Calculado por abilities.js -> getStat, incluye Todo)
-            const finalVal = mon.getStat(s.id);
+            let finalVal = typeof mon.getStat === 'function' ? mon.getStat(s.id) : null;
 
             // 3. Calcular influencia de Etapas (Swords Dance, etc)
-            const stage = mon.stages[s.id] || 0;
+            const stage = mon.stages?.[s.id] || 0;
             let stageMult = 1;
             if (stage >= 0) stageMult = (2 + stage) / 2;
             else stageMult = 2 / (2 + Math.abs(stage));
@@ -176,6 +247,7 @@
             if (s.id === 'spe' && mon.status === 'PAR') {
                 standardVal = Math.floor(standardVal * 0.5);
             }
+            if (!Number.isFinite(finalVal)) finalVal = standardVal;
 
             // 4. Valor Añadido por Habilidad (Diferencia)
             const abilityDiff = finalVal - standardVal;

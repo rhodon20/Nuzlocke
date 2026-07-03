@@ -28,13 +28,14 @@
   if (mode === 'nuzlocke' || mode === 'daily') {
     keys = Object.keys(POKEMON_SPECIES);
   } else {
-    keys = Object.keys(POKEMON_SPECIES).filter(k => POKEMON_SPECIES[k].tier === 1); 
+    keys = Object.keys(POKEMON_SPECIES).filter(k => (POKEMON_SPECIES[k].spawnTier || 1) === 1);
     if (keys.length === 0) keys = Object.keys(POKEMON_SPECIES);
   }
   
   const randomStarter = keys[Math.floor(gameRandom() * keys.length)];
   state.team = [new Pokemon(randomStarter, 5, mode !== 'normal')]; 
   
+  $('game-container').classList.remove('pre-game');
   $('start-buttons').style.display = 'none';
   $('game-title').classList.add('hidden-title');
   if (mode === 'daily') $('mode-display').innerText = `Diario ${state.dailyChallenge.dateKey}`;
@@ -68,6 +69,7 @@ function getTeamAverageLevel() {
 }
 
 function startBattle() {
+  if (typeof recordTelemetryBattle === 'function') recordTelemetryBattle('start');
   const rogueCfg = (state.gameMode === 'roguerun' && typeof window !== 'undefined')
     ? (window.__rogueRunBattleConfig || null)
     : null;

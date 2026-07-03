@@ -2,6 +2,7 @@
    POST-BATTLE
 ========================================================= */
 async function handleWin() {
+  if (typeof recordTelemetryBattle === 'function') recordTelemetryBattle('win');
   log(`Ganaste! ${opponent.name} debilitado.`);
   state.streak++;
   recordRunEvent('battle_win', { opponent: opponent?.name || null, streak: state.streak, badges: state.badges });
@@ -116,7 +117,7 @@ async function checkEvolutionAndMoves(player) {
 
   if (state.gameMode === 'nuzlocke') {
     if (player.level % 10 === 0) {
-      const allMoves = Object.keys(MOVES);
+      const allMoves = Object.keys(MOVES).filter(key => key !== 'Struggle' && !MOVES[key]?.internalAction);
       newMove = allMoves[Math.floor(gameRandom() * allMoves.length)];
     }
   } else {
@@ -184,6 +185,7 @@ function promptForgetMove(player, newMove) {
 function checkDefeat() {
   const alive = state.team.some(p => p.hp > 0);
   if(!alive) {
+    if (typeof recordTelemetryBattle === 'function') recordTelemetryBattle('loss');
     recordRunEvent('battle_loss', { streak: state.streak, badges: state.badges });
     recordRunResult('DERROTA');
     log(`Game Over. Racha final: ${state.streak} | Medallas: ${state.badges}`);
@@ -210,7 +212,9 @@ function usePotion() {
   if (turnLock) return;
   const p = state.team[state.activeIdx];
   if(state.inventory.pots > 0 && p.hp < p.maxHp) {
+    if (typeof recordTelemetryTurn === 'function') recordTelemetryTurn('potion');
     turnLock = true;
+    advanceActionCooldowns(p);
     state.inventory.pots--;
     const healAmount = Math.floor(p.maxHp * 0.60);
     p.hp = Math.min(p.maxHp, p.hp + healAmount);
@@ -263,7 +267,9 @@ async function attemptCapture() {
     return;
   }
   if(turnLock || state.inventory.balls <= 0) return;
+  if (typeof recordTelemetryTurn === 'function') recordTelemetryTurn('ball');
   turnLock = true;
+  advanceActionCooldowns(state.team[state.activeIdx]);
   state.inventory.balls--;
   renderAll();
   
@@ -455,6 +461,9 @@ function doSwitch(idx, forced, opts = {}) {
     return;
   }
   const oldMon = state.team[state.activeIdx];
+  if (!forced && typeof recordTelemetryTurn === 'function') recordTelemetryTurn('switch');
+  if (!forced && oldMon) advanceActionCooldowns(oldMon);
+  if (oldMon && typeof restoreTransformation === 'function') restoreTransformation(oldMon);
   let passedStages = null;
   if (oldMon) {
     if (opts.preservePositiveStages && oldMon.stages) {
@@ -468,6 +477,10 @@ function doSwitch(idx, forced, opts = {}) {
     oldMon.perishTurns = 0;
     oldMon.comboStacks = 0;
     oldMon.lastMoveType = null;
+    oldMon.chainMoveKey = null;
+    oldMon.chainMoveStacks = 0;
+    oldMon.chargingMoveKey = null;
+    oldMon.rechargeTurns = 0;
     oldMon.protectThisTurn = false;
     oldMon.protectStreak = 0;
     oldMon.healBlockTurns = 0;

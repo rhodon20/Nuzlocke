@@ -20,6 +20,9 @@
 })();
 
 function getBestAIMove(aiMon, targetMon) {
+    const forcedMoves = typeof getUsableMoveKeys === 'function' ? getUsableMoveKeys(aiMon) : [];
+    if ((aiMon.rechargeTurns || 0) > 0) return 'Recharge';
+    if (aiMon.chargingMoveKey && forcedMoves.includes(aiMon.chargingMoveKey)) return aiMon.chargingMoveKey;
     let bestMove = null;
     let bestScore = -9999;
     let hasLikelyKO = false;
@@ -29,7 +32,10 @@ function getBestAIMove(aiMon, targetMon) {
             const m = MOVES[mKey];
             if (!m || m.cat === 'Est' || m.poder <= 0) return;
             if (typeof getMoveCooldown === 'function' && getMoveCooldown(aiMon, mKey) > 0) return;
-            const dmgSim = calcDamage(aiMon, targetMon, m);
+            const evaluatedMove = typeof getChainedMovePreview === 'function' ? getChainedMovePreview(aiMon, m, mKey) : m;
+            const singleHit = calcDamage(aiMon, targetMon, evaluatedMove);
+            const averageHits = m.multiHit ? (m.multiHit.min === m.multiHit.max ? m.multiHit.min : 3) : 1;
+            const dmgSim = { ...singleHit, amount: singleHit.amount * averageHits };
             const hitChance = (typeof getMoveHitChance === 'function') ? getMoveHitChance(aiMon, targetMon, m) : 1;
             if (dmgSim.amount >= targetMon.hp && hitChance >= 0.7) hasLikelyKO = true;
         });
@@ -41,16 +47,26 @@ function getBestAIMove(aiMon, targetMon) {
         if (typeof getMoveCooldown === 'function' && getMoveCooldown(aiMon, mKey) > 0) return;
 
         let score = 0;
+        if (m.randomMove) score += 12;
         const isStatusMove = m.cat === 'Est' || m.poder === 0;
         if (isStatusMove && (aiMon.tauntTurns || 0) > 0) {
             score -= 200;
         }
 
-        if (!isStatusMove || m.nombre === 'Furia Dragon') {
-            const dmgSim = calcDamage(aiMon, targetMon, m);
-            const hitChance = (typeof getMoveHitChance === 'function') ? getMoveHitChance(aiMon, targetMon, m) : 1;
+        if (!isStatusMove || m.nombre === 'Furia Dragon' || m.ohko) {
+            const evaluatedMove = typeof getChainedMovePreview === 'function' ? getChainedMovePreview(aiMon, m, mKey) : m;
+            const singleHit = calcDamage(aiMon, targetMon, evaluatedMove);
+            const averageHits = m.multiHit ? (m.multiHit.min === m.multiHit.max ? m.multiHit.min : 3) : 1;
+            const simulatedAmount = m.ohko && singleHit.mult !== 0 ? targetMon.hp : singleHit.amount * averageHits;
+            const dmgSim = { ...singleHit, amount: simulatedAmount };
+            const hitChance = (typeof getMoveHitChance === 'function') ? getMoveHitChance(aiMon, targetMon, evaluatedMove) : 1;
             const expectedDamage = dmgSim.amount * hitChance;
             score += expectedDamage;
+            if (m.drain && aiMon.hp < aiMon.maxHp) score += expectedDamage * m.drain * 0.35;
+            if (m.recoil) score -= expectedDamage * m.recoil * (aiMon.hp / Math.max(1, aiMon.maxHp) < 0.35 ? 0.8 : 0.35);
+            if (m.hpCost) score -= aiMon.maxHp * m.hpCost * 0.4;
+            if (m.chargeTurns && aiMon.chargingMoveKey !== mKey && m.skipChargeWeather !== getWeather()?.type) score *= 0.65;
+            if (m.rechargeTurns) score *= 0.78;
             if (dmgSim.amount >= targetMon.hp) score += 1000 * hitChance;
         }
 
@@ -75,6 +91,13 @@ function getBestAIMove(aiMon, targetMon) {
                 if (canConfuse) score += 16;
                 else score -= 20;
             }
+            if (typeof e === 'string' && e === 'SELF_CON') score -= 18;
+            if (typeof e === 'string' && e === 'TRANSFORM') {
+                const ownTotal = ['atk','def','spa','spd','spe'].reduce((sum, stat) => sum + (aiMon[stat] || 0), 0);
+                const targetTotal = ['atk','def','spa','spd','spe'].reduce((sum, stat) => sum + (targetMon[stat] || 0), 0);
+                score += targetTotal > ownTotal ? 30 : 6;
+            }
+            if (typeof e === 'string' && e === 'SKETCH') score += targetMon.lastUsedMoveKey ? 18 : -25;
             if (typeof e === 'string' && e === 'REFLECT') score += 14;
             if (typeof e === 'string' && e === 'REFLECT') {
                 if (typeof getSideFieldState === 'function' && typeof isPlayerSideMon === 'function') {

@@ -51,7 +51,13 @@ function setupTestGlobals() {
     runEvent: null
   };
 
-  global.MOVES = { Tackle: { nombre: 'Placaje', tipo: 'Normal', poder: 40, cat: 'Fis' } };
+  global.MOVES = {
+    Tackle: { nombre: 'Placaje', tipo: 'Normal', poder: 40, cat: 'Fis' },
+    Teleport: { nombre: 'Teletransporte', tipo: 'Psíquico', poder: 0, cat: 'Est' },
+    Recover: { nombre: 'Recuperación', tipo: 'Normal', poder: 0, cat: 'Est', cooldown: 3 },
+    Struggle: { nombre: 'Combate', tipo: 'Normal', poder: 50, cat: 'Fis', emergency: true },
+    Recharge: { nombre: 'Recargar', tipo: 'Normal', poder: 0, cat: 'Est', internalAction: true }
+  };
   global.Pokemon = class Pokemon {
     constructor(name, level) {
       this.name = name;
@@ -114,6 +120,8 @@ function runTests() {
   setupTestGlobals();
 
   loadScript('runtime_seed.js');
+  loadScript('runtime_move_utils.js');
+  loadScript('runtime_telemetry.js');
   loadScript('runtime_save_migration.js');
   loadScript('types.js');
   loadScript('battle_helpers.js');
@@ -215,7 +223,126 @@ function runTests() {
   assertEqual(disD.disableTurns, 3, 'Disable should set disable duration');
   assertEqual(isMoveDisabled(disD, 'Tackle'), true, 'isMoveDisabled should report true for disabled move');
 
-  console.log('All tests passed (11/11).');
+  // 12) A species with only status moves must receive a damaging starter move
+  const safeSpeciesMoves = buildInitialMoveSet({ moves: ['Teleport'] }, 5, false);
+  assert(safeSpeciesMoves.some(isDamagingMoveKey), 'initial species moves should include damage');
+  assertEqual(safeSpeciesMoves.includes('Tackle'), true, 'status-only species should receive Tackle');
+
+  // 13) Randomized level-5 starters must always begin with damage
+  applyRunSeed('starter-move-safety');
+  const randomizedMoves = buildInitialMoveSet({ moves: [] }, 5, true);
+  assert(randomizedMoves.some(isDamagingMoveKey), 'randomized starter should include a damaging move');
+  assertEqual(randomizedMoves.includes('Struggle'), false, 'Combate must not occupy a normal move slot');
+
+  // 14) No selectable move should fall back to Combate
+  const cooldownMon = { moves: ['Recover'], moveCooldowns: { Recover: 2 }, disableTurns: 0 };
+  assertEqual(getUsableMoveKeys(cooldownMon).length, 0, 'cooldown move should not be selectable');
+  assertEqual(chooseRandomUsableMoveKey(cooldownMon), 'Struggle', 'no selectable moves should use Combate');
+
+  // 15) Non-move actions must advance cooldowns
+  advanceActionCooldowns(cooldownMon);
+  assertEqual(getMoveCooldown(cooldownMon, 'Recover'), 1, 'item turn should advance cooldown by one');
+
+  // 16) Mystic Fog should reduce global accuracy by 10%
+  resetBattleField();
+  battleField.runEvent = { id: 'MYSTIC_FOG', accMult: 0.9 };
+  const fogChance = getMoveHitChance({ stages: { acc: 0 } }, { stages: { eva: 0 } }, { accuracy: 1 });
+  assertEqual(fogChance, 0.9, 'Mystic Fog should apply its accuracy multiplier');
+
+  // 17) Healing Breeze should restore 1/16 max HP
+  battleField.runEvent = { id: 'HEALING_BREEZE', label: 'Brisa Vital', endTurnHealPct: 1 / 16 };
+  const breezeMon = { name: 'BreezeMon', hp: 100, maxHp: 160 };
+  runBattleEventEndTurn(breezeMon);
+  assertEqual(breezeMon.hp, 110, 'Healing Breeze should heal 1/16 max HP');
+
+  // 18) Blood Moon should increase regular damage globally
+  const oldEventRandom = global.gameRandom;
+  global.gameRandom = () => 0.5;
+  const bloodAtk = { level: 30, types: ['Normal'], status: null, stages: {}, getStat: () => 80 };
+  const bloodDef = { types: ['Normal'], status: null, stages: {}, getStat: () => 80 };
+  battleField.runEvent = null;
+  const regularDamage = calcDamage(bloodAtk, bloodDef, MOVES.Tackle).amount;
+  battleField.runEvent = { id: 'BLOOD_MOON', dmgMult: 1.15 };
+  const bloodDamage = calcDamage(bloodAtk, bloodDef, MOVES.Tackle).amount;
+  assert(bloodDamage > regularDamage, 'Blood Moon should increase damage');
+  global.gameRandom = oldEventRandom;
+
+  // 19) Self-confusion effects must affect the user, not the target
+  const selfConUser = { name: 'User', hp: 50, confusionTurns: 0, confusionShieldTurns: 0 };
+  const selfConTarget = { name: 'Target', hp: 50, confusionTurns: 0, confusionShieldTurns: 0 };
+  applySingleEffect(selfConUser, selfConTarget, 'SELF_CON', { attackerSide: true });
+  assert(selfConUser.confusionTurns > 0, 'SELF_CON should confuse the move user');
+  assertEqual(selfConTarget.confusionTurns, 0, 'SELF_CON should not confuse the target');
+
+  // 20) Fixed multi-hit moves must always use their configured hit count
+  assertEqual(getMultiHitCount({ multiHit: { min: 2, max: 2 } }), 2, 'fixed multi-hit count should be respected');
+
+  // 21) Variable 2-5 hit moves must stay inside their configured range
+  const oldMultiRandom = global.gameRandom;
+  global.gameRandom = () => 0.99;
+  assertEqual(getMultiHitCount({ multiHit: { min: 2, max: 5 } }), 5, 'high roll should produce five hits');
+  global.gameRandom = () => 0.1;
+  assertEqual(getMultiHitCount({ multiHit: { min: 2, max: 5 } }), 2, 'low roll should produce two hits');
+  global.gameRandom = oldMultiRandom;
+
+  // 22) Chained moves must grow and reset on failure/change
+  const chainMon = { chainMoveKey: null, chainMoveStacks: 0 };
+  const rollout = { poder: 30, chainPower: { multiplier: 2, maxStacks: 5 } };
+  assertEqual(getChainedMovePreview(chainMon, rollout, 'Rollout').poder, 30, 'first chain hit should use base power');
+  commitMoveChain(chainMon, rollout, 'Rollout', true);
+  assertEqual(getChainedMovePreview(chainMon, rollout, 'Rollout').poder, 60, 'second chain hit should double power');
+  commitMoveChain(chainMon, rollout, 'Rollout', false);
+  assertEqual(chainMon.chainMoveStacks, 0, 'failed chain should reset stacks');
+
+  // 23) Low-HP variable power must scale through its thresholds
+  const reversal = { poder: 20, variablePower: 'LOW_HP' };
+  assertEqual(getChainedMovePreview({ hp: 100, maxHp: 100 }, reversal, 'Reversal').poder, 20, 'full HP should use minimum variable power');
+  assertEqual(getChainedMovePreview({ hp: 5, maxHp: 100 }, reversal, 'Reversal').poder, 150, 'critical HP should strongly increase variable power');
+
+  // 24) OHKO accuracy must reject higher-level targets
+  const ohkoMove = { accuracy: 0.3, ohko: true };
+  assertEqual(getMoveHitChance({ level: 20, stages: {} }, { level: 21, stages: {} }, ohkoMove), 0, 'OHKO should fail against higher-level targets');
+  assertEqual(getMoveHitChance({ level: 20, stages: {} }, { level: 20, stages: {} }, ohkoMove), 0.3, 'equal-level OHKO should use base accuracy');
+
+  // 25) Charge and recharge states must force their corresponding action
+  global.MOVES['Sky Attack'] = { nombre: 'Ataque Aéreo', poder: 140, cat: 'Fis', chargeTurns: 1 };
+  const forcedMon = { moves: ['Tackle', 'Sky Attack'], moveCooldowns: {}, chargingMoveKey: 'Sky Attack', rechargeTurns: 0 };
+  assertEqual(getUsableMoveKeys(forcedMon)[0], 'Sky Attack', 'charging should force the prepared move');
+  forcedMon.chargingMoveKey = null;
+  forcedMon.rechargeTurns = 1;
+  assertEqual(getUsableMoveKeys(forcedMon)[0], 'Recharge', 'recharge should force the recharge action');
+
+  // 26) Transform must copy combat data and restore the original form
+  const transformUser = { name:'Ditto', types:['Normal'], atk:10, def:10, spa:10, spd:10, spe:10, moves:['Transform'], ability:null, transformBackup:null };
+  const transformTarget = { name:'Target', types:['Agua'], atk:20, def:21, spa:22, spd:23, spe:24, moves:['Tackle'], ability:'TestAbility' };
+  applySingleEffect(transformUser, transformTarget, 'TRANSFORM', { attackerSide:true });
+  assertEqual(transformUser.types[0], 'Agua', 'Transform should copy target typing');
+  assertEqual(transformUser.atk, 20, 'Transform should copy target stats');
+  restoreTransformation(transformUser);
+  assertEqual(transformUser.types[0], 'Normal', 'Transform restore should recover original typing');
+
+  // 27) Sketch must replace itself with the target last used move
+  const sketchUser = { name:'Smeargle', moves:['Sketch'] };
+  const sketchTarget = { name:'Target', lastUsedMoveKey:'Tackle' };
+  applySingleEffect(sketchUser, sketchTarget, 'SKETCH', { attackerSide:true });
+  assertEqual(sketchUser.moves[0], 'Tackle', 'Sketch should copy the target last move');
+
+  // 28) Run telemetry must aggregate turns, accuracy, damage and favorites
+  resetRunTelemetry();
+  recordTelemetryBattle('start');
+  recordTelemetryTurn('potion');
+  recordTelemetryMove('Tackle', true, { resolved:true, damage:12, hits:1 });
+  recordTelemetryMove('Tackle', true, { missed:true });
+  recordTelemetryBattle('win');
+  const telemetrySummary = getTelemetrySummary();
+  assertEqual(telemetrySummary.battles, 1, 'telemetry should count battle starts');
+  assertEqual(telemetrySummary.wins, 1, 'telemetry should count wins');
+  assertEqual(telemetrySummary.turns, 1, 'telemetry should count item turns');
+  assertEqual(telemetrySummary.accuracyPct, 50, 'telemetry accuracy should use checked attempts');
+  assertEqual(telemetrySummary.damageDealt, 12, 'telemetry should aggregate player damage');
+  assertEqual(telemetrySummary.favoriteMove, 'Tackle', 'telemetry should identify favorite move');
+
+  console.log('All tests passed (28/28).');
 }
 
 try {

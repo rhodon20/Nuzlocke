@@ -50,7 +50,7 @@ if (typeof window.registerGamePlugin === 'function') {
 }
 
 window.addEventListener('load', () => {
-    const btnContainer = document.getElementById('start-buttons');
+    const btnContainer = document.getElementById('extra-mode-buttons') || document.getElementById('start-buttons');
     if (!btnContainer) return;
 
     const btnPvP = document.createElement('button');
@@ -60,7 +60,6 @@ window.addEventListener('load', () => {
     btnPvP.style.padding = '14px';
     btnPvP.style.fontSize = '1.1rem';
     btnPvP.style.border = 'none';
-    btnPvP.style.marginTop = '10px';
     btnPvP.onclick = startPvPGame;
     btnContainer.appendChild(btnPvP);
 
@@ -165,8 +164,10 @@ window.pickDraftMon = pickDraftMon;
 window.cancelDraftPvP = cancelDraftPvP;
 
 function assignRandomMoves(mon) {
-    const allMoves = Object.keys(MOVES);
+    const allMoves = Object.keys(MOVES).filter(key => key !== 'Struggle' && !MOVES[key]?.internalAction);
     mon.moves = [];
+    const damaging = allMoves.filter(key => typeof isDamagingMoveKey === 'function' && isDamagingMoveKey(key));
+    if (damaging.length) mon.moves.push(damaging[Math.floor(gameRandom() * damaging.length)]);
     while (mon.moves.length < PVP_CONFIG.MOVE_COUNT) {
         const rndMove = allMoves[Math.floor(gameRandom() * allMoves.length)];
         if (!mon.moves.includes(rndMove)) mon.moves.push(rndMove);
@@ -205,14 +206,15 @@ function startPvPMatch(team1, team2, modeLabel, opts = {}) {
     pvpState.online.statusText = pvpState.mode === 'online' ? 'Esperando movimiento local.' : '';
     pvpState.turnPhase = 0;
     pvpState.roundCount = 0;
-    pvpState.p1.team = team1;
-    pvpState.p2.team = team2;
+    pvpState.p1.team = (team1 || []).map(hydratePvPMon);
+    pvpState.p2.team = (team2 || []).map(hydratePvPMon);
     pvpState.p1.activeIdx = 0;
     pvpState.p2.activeIdx = 0;
     pvpState.p1.pendingMove = null;
     pvpState.p2.pendingMove = null;
     if (typeof resetBattleField === 'function') resetBattleField();
 
+    document.getElementById('game-container').classList.remove('pre-game');
     document.getElementById('start-buttons').style.display = 'none';
     document.getElementById('game-title').classList.add('hidden-title');
     document.getElementById('mode-display').innerText = modeLabel;
@@ -233,6 +235,16 @@ function startPvPMatch(team1, team2, modeLabel, opts = {}) {
     if (pvpState.mode === 'online') log('🌐 PvP Online conectado. Esperando sincronizacion.');
     else log('⚔️ ¡Comienza el duelo! Elige tu movimiento en secreto.');
     renderPvP();
+}
+
+function hydratePvPMon(raw) {
+    if (!raw || !raw.name) return raw;
+    if (raw instanceof Pokemon) return raw;
+    const mon = new Pokemon(raw.name, Number(raw.level) || 1, true);
+    Object.assign(mon, raw);
+    mon.stages = { atk:0, def:0, spa:0, spd:0, spe:0, acc:0, eva:0, ...(raw.stages || {}) };
+    mon.moveCooldowns = raw.moveCooldowns && typeof raw.moveCooldowns === 'object' ? raw.moveCooldowns : {};
+    return mon;
 }
 
 function renderPvP() {
@@ -262,6 +274,7 @@ function renderPvP() {
 
     renderBoxManual(pMon, 'player-box', true, playerObj.name);
     renderBoxManual(oMon, 'opponent-box', false, opponentObj.name);
+    if (typeof renderBattleEnvironment === 'function') renderBattleEnvironment({ localIsP1: isP1View });
 
     fetchSpriteManual(pMon, 'player-sprite-slot', true);
     fetchSpriteManual(oMon, 'opponent-sprite-slot', false);
@@ -275,16 +288,21 @@ function renderPvP() {
             const m = MOVES[mKey];
             const cd = typeof getMoveCooldown === 'function' ? getMoveCooldown(pMon, mKey) : 0;
             const dis = typeof isMoveDisabled === 'function' ? isMoveDisabled(pMon, mKey) : false;
-            const disabled = cd > 0 || dis;
+            const taunted = (pMon.tauntTurns || 0) > 0 && m.cat === 'Est';
+            const forcedOut = ((pMon.rechargeTurns || 0) > 0) || (pMon.chargingMoveKey && pMon.chargingMoveKey !== mKey);
+            const disabled = cd > 0 || dis || taunted || forcedOut;
             const cdText = cd > 0 ? ` / CD ${cd}` : '';
-            const disText = dis ? ' / ANULADO' : '';
+            const disText = dis ? ' / ANULADO' : (taunted ? ' / MOFA' : '');
+            const strategyText = typeof getMoveStrategyLabel === 'function' ? getMoveStrategyLabel(m) : '';
             return `
             <button class="btn-move type-${m.tipo}" onclick="doTurn('${mKey}')" ${disabled ? 'disabled' : ''}>
-              ${m.nombre}<br><small>${m.tipo} / ${m.poder}${cdText}${disText}</small>
+              ${cd > 0 ? `<span class="btn-move-cd">CD ${cd}</span>` : ''}
+              ${m.nombre}<br><small>${m.tipo} / ${m.poder}${strategyText ? ` / ${strategyText}` : ''}${cdText}${disText}</small>
             </button>
             `;
         }).join('');
-        controlsDiv.innerHTML = movesHTML;
+        const emergencyHTML = typeof getEmergencyMoveButton === 'function' ? getEmergencyMoveButton(pMon) : '';
+        controlsDiv.innerHTML = movesHTML + emergencyHTML;
 
         anime({
             targets: '.btn-move',
@@ -314,6 +332,7 @@ function renderPvPOnline() {
 
     renderBoxManual(pMon, 'player-box', true, playerObj.name);
     renderBoxManual(oMon, 'opponent-box', false, opponentObj.name);
+    if (typeof renderBattleEnvironment === 'function') renderBattleEnvironment({ localIsP1 });
     fetchSpriteManual(pMon, 'player-sprite-slot', true);
     fetchSpriteManual(oMon, 'opponent-sprite-slot', false);
 
@@ -331,15 +350,19 @@ function renderPvPOnline() {
             if (!m) return '';
             const cd = typeof getMoveCooldown === 'function' ? getMoveCooldown(pMon, mKey) : 0;
             const dis = typeof isMoveDisabled === 'function' ? isMoveDisabled(pMon, mKey) : false;
-            const disabled = cd > 0 || dis;
+            const taunted = (pMon.tauntTurns || 0) > 0 && m.cat === 'Est';
+            const forcedOut = ((pMon.rechargeTurns || 0) > 0) || (pMon.chargingMoveKey && pMon.chargingMoveKey !== mKey);
+            const disabled = cd > 0 || dis || taunted || forcedOut;
             const cdText = cd > 0 ? ` / CD ${cd}` : '';
-            const disText = dis ? ' / ANULADO' : '';
+            const disText = dis ? ' / ANULADO' : (taunted ? ' / MOFA' : '');
+            const strategyText = typeof getMoveStrategyLabel === 'function' ? getMoveStrategyLabel(m) : '';
             return `
             <button class="btn-move type-${m.tipo}" onclick="doTurn('${mKey}')" ${disabled ? 'disabled' : ''}>
-              ${m.nombre}<br><small>${m.tipo} / ${m.poder}${cdText}${disText}</small>
+              ${cd > 0 ? `<span class="btn-move-cd">CD ${cd}</span>` : ''}
+              ${m.nombre}<br><small>${m.tipo} / ${m.poder}${strategyText ? ` / ${strategyText}` : ''}${cdText}${disText}</small>
             </button>
             `;
-        }).join('');
+        }).join('') + (typeof getEmergencyMoveButton === 'function' ? getEmergencyMoveButton(pMon) : '');
     }
 
     const indicator = document.getElementById('mode-display');
@@ -356,7 +379,8 @@ function renderBoxManual(mon, id, isPlayer, labelName) {
 
     const hpPct = (mon.hp / mon.maxHp) * 100;
     const color = hpPct > 50 ? '#4caf50' : hpPct > 20 ? '#ffeb3b' : '#f44336';
-    const statusHTML = mon.status ? `<span class="status-tag status-${mon.status}">${mon.status}</span>` : '';
+    const statusHTML = typeof getMonStatusBadge === 'function' ? getMonStatusBadge(mon) : (mon.status ? `<span class="status-tag status-${mon.status}">${mon.status}</span>` : '');
+    const effectsHTML = typeof getMonEffectBadges === 'function' ? getMonEffectBadges(mon) : '';
 
     const currentMonName = container.dataset.monName;
 
@@ -370,6 +394,7 @@ function renderBoxManual(mon, id, isPlayer, labelName) {
             <div class="hp-fill" style="width:${hpPct}%; background-color:${color}"></div>
           </div>
           <div class="hp-text">${statusHTML} ${mon.hp}/${mon.maxHp}</div>
+          <div class="effect-tags">${effectsHTML}</div>
         `;
         container.dataset.monName = mon.name;
     } else {
@@ -384,6 +409,8 @@ function renderBoxManual(mon, id, isPlayer, labelName) {
         });
 
         hpText.innerHTML = `${statusHTML} ${mon.hp}/${mon.maxHp}`;
+        const effectTags = container.querySelector('.effect-tags');
+        if (effectTags) effectTags.innerHTML = effectsHTML;
     }
 }
 
@@ -726,6 +753,7 @@ window.closePvPEndOverlay = function closePvPEndOverlay() {
 function exportPvPSnapshot() {
     return {
         roundCount: pvpState.roundCount,
+        battleField: JSON.parse(JSON.stringify(battleField)),
         p1: {
             name: pvpState.p1.name,
             activeIdx: pvpState.p1.activeIdx,
@@ -746,14 +774,17 @@ function importPvPSnapshot(snapshot) {
         name: snapshot.p1.name || 'Jugador 1',
         activeIdx: Number.isFinite(snapshot.p1.activeIdx) ? snapshot.p1.activeIdx : 0,
         pendingMove: null,
-        team: Array.isArray(snapshot.p1.team) ? snapshot.p1.team : []
+        team: Array.isArray(snapshot.p1.team) ? snapshot.p1.team.map(hydratePvPMon) : []
     };
     pvpState.p2 = {
         name: snapshot.p2.name || 'Jugador 2',
         activeIdx: Number.isFinite(snapshot.p2.activeIdx) ? snapshot.p2.activeIdx : 0,
         pendingMove: null,
-        team: Array.isArray(snapshot.p2.team) ? snapshot.p2.team : []
+        team: Array.isArray(snapshot.p2.team) ? snapshot.p2.team.map(hydratePvPMon) : []
     };
+    if (snapshot.battleField && typeof snapshot.battleField === 'object') {
+        battleField = JSON.parse(JSON.stringify(snapshot.battleField));
+    }
 }
 
 window.exportPvPSnapshot = exportPvPSnapshot;

@@ -131,15 +131,13 @@
   }
 
   function ensureProfilePanel() {
-    const host = document.getElementById('start-buttons');
+    const host = document.getElementById('extra-mode-buttons') || document.getElementById('start-buttons');
     if (!host) return null;
     let panel = document.getElementById('roguerun-profile');
     if (!panel) {
       panel = document.createElement('div');
       panel.id = 'roguerun-profile';
-      const history = document.getElementById('run-history');
-      if (history && history.parentElement === host) host.insertBefore(panel, history);
-      else host.appendChild(panel);
+      host.appendChild(panel);
     }
     return panel;
   }
@@ -153,7 +151,7 @@
   }
 
   function ensureRogueRunButton() {
-    const host = document.getElementById('start-buttons');
+    const host = document.getElementById('extra-mode-buttons') || document.getElementById('start-buttons');
     if (!host || document.getElementById('btn-roguerun')) return;
     const btn = document.createElement('button');
     btn.id = 'btn-roguerun';
@@ -164,9 +162,7 @@
     btn.style.fontSize = '1.1rem';
     btn.style.border = 'none';
     btn.onclick = () => startGame('roguerun');
-    const history = document.getElementById('run-history');
-    if (history && history.parentElement === host) host.insertBefore(btn, history);
-    else host.appendChild(btn);
+    host.appendChild(btn);
   }
 
   function ensureOverlay() {

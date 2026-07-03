@@ -24,6 +24,7 @@ function loadGame() {
       if (seedInput) seedInput.value = state.runSeed;
       opponent = new Pokemon(opponent ? opponent.name : 'Rattata', 5);
 
+      $('game-container').classList.remove('pre-game');
       $('start-buttons').style.display = 'none';
       $('game-title').classList.add('hidden-title');
       if (state.gameMode === 'daily' && state.dailyChallenge?.dateKey) $('mode-display').innerText = `Diario ${state.dailyChallenge.dateKey}`;

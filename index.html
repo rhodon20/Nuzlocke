@@ -2,9 +2,10 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Pokémon Rogue - Kanto Edition</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
+  <script src="runtime_animation_fallback.js"></script>
   <style>
     :root{
       --ui-bg: #0b1020;
@@ -19,6 +20,8 @@
       --ui-muted:#9aa3c7;
       --xp-bar: #2196f3;
     }
+
+    *, *::before, *::after { box-sizing: border-box; }
 
     body {
       font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
@@ -36,7 +39,8 @@
     }
 
     #game-container {
-      width: 100%;
+      width: min(500px, calc(100vw - 20px));
+      min-width: 0;
       max-width: 500px;
       background: linear-gradient(180deg, #0b1020 0%, #070b18 100%);
       padding: 12px;
@@ -51,6 +55,11 @@
       flex-direction: column;
       gap: 10px;
     }
+
+    #game-container.pre-game #battle-scene,
+    #game-container.pre-game #team-bar,
+    #game-container.pre-game #combat-log,
+    #game-container.pre-game #controls-area { display: none; }
 
     h1 {
       color: var(--ui-accent-2);
@@ -76,12 +85,68 @@
       box-shadow: inset 0 0 40px rgba(0,0,0,.6);
       transition: background 0.5s ease;
     }
-
-    .bg-forest { background: linear-gradient(180deg, #81c784 0%, #2e7d32 30%, #1b5e20 100%); }
-    .bg-cave { background: linear-gradient(180deg, #795548 0%, #3e2723 40%, #1a100e 100%); }
-    .bg-ocean { background: linear-gradient(180deg, #4fc3f7 0%, #0288d1 40%, #01579b 100%); }
-    .bg-night { background: linear-gradient(180deg, #303f9f 0%, #1a237e 40%, #000000 100%); }
-    .bg-volcano { background: linear-gradient(180deg, #ff8a65 0%, #d84315 40%, #3e2723 100%); }
+    #battle-scene::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      pointer-events: none;
+      background: linear-gradient(180deg, rgba(255,255,255,.12), transparent 38%, rgba(0,0,0,.22));
+      mix-blend-mode: soft-light;
+    }
+    #battle-atmosphere {
+      position: absolute;
+      inset: -35%;
+      z-index: 22;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity .35s ease;
+    }
+    #battle-scene.weather-rain #battle-atmosphere { opacity:.65; background:repeating-linear-gradient(110deg,transparent 0 18px,rgba(190,230,255,.7) 19px 21px,transparent 22px 38px); animation:weather-fall .5s linear infinite; }
+    #battle-scene.weather-sand #battle-atmosphere { opacity:.5; background:radial-gradient(circle,rgba(255,212,133,.75) 0 2px,transparent 3px) 0 0/27px 21px; animation:weather-drift 1.5s linear infinite; }
+    #battle-scene.weather-hail #battle-atmosphere { opacity:.72; background:radial-gradient(circle,white 0 2px,transparent 3px) 0 0/31px 27px; animation:weather-fall .8s linear infinite; }
+    #battle-scene.weather-sun #battle-atmosphere { opacity:.7; background:radial-gradient(circle at 75% 25%,rgba(255,247,170,.8),rgba(255,183,77,.2) 15%,transparent 36%); }
+    #battle-scene.event-blood-moon { box-shadow:inset 0 0 55px rgba(190,20,35,.55); }
+    #battle-scene.event-mystic-fog { box-shadow:inset 0 0 55px rgba(190,205,225,.32); }
+    #battle-scene.event-healing-breeze { box-shadow:inset 0 0 55px rgba(76,200,135,.32); }
+    @keyframes weather-fall { to { transform:translate(-45px,70px); } }
+    @keyframes weather-drift { to { transform:translate(55px,20px); } }
+    #battle-context {
+      position:absolute;
+      top:7px;
+      left:50%;
+      transform:translateX(-50%);
+      z-index:35;
+      display:flex;
+      gap:4px;
+      max-width:52%;
+      pointer-events:none;
+    }
+    .battle-context-chip, .field-chip, .effect-chip {
+      border:1px solid rgba(255,255,255,.25);
+      background:rgba(7,11,24,.82);
+      color:#f4f6ff;
+      border-radius:999px;
+      padding:3px 7px;
+      font-size:.62rem;
+      font-weight:800;
+      line-height:1;
+      white-space:nowrap;
+      box-shadow:0 2px 7px rgba(0,0,0,.35);
+    }
+    .battle-context-chip.event-blood-moon { border-color:#ff6574; color:#ffb3ba; }
+    .battle-context-chip.event-mystic-fog { border-color:#bdc9df; color:#e0e7f3; }
+    .battle-context-chip.event-healing-breeze { border-color:#65d69c; color:#aef0cc; }
+    .field-effects { position:absolute; z-index:34; display:flex; flex-wrap:wrap; gap:3px; max-width:45%; pointer-events:none; }
+    #opponent-field-effects { top:82px; left:10px; }
+    #player-field-effects { right:10px; bottom:9px; justify-content:flex-end; }
+    .field-chip.screen { border-color:#8ad8ff; color:#bdeaff; }
+    .field-chip.hazard { border-color:#e29474; color:#ffc0a8; }
+    .bg-forest { --ground:#315b2d; --ground-edge:#9bc16d; background: radial-gradient(ellipse at 18% 35%, rgba(18,72,31,.9) 0 12%, transparent 13%), radial-gradient(ellipse at 82% 30%, rgba(12,61,27,.9) 0 16%, transparent 17%), linear-gradient(180deg,#9bd7a2 0 35%,#4f9149 36% 58%,#183d25 59% 100%); }
+    .bg-cave { --ground:#4b352e; --ground-edge:#9a7564; background: radial-gradient(circle at 50% 18%,rgba(255,190,115,.14),transparent 28%), linear-gradient(125deg,transparent 0 22%,rgba(25,13,12,.45) 23% 29%,transparent 30% 70%,rgba(25,13,12,.5) 71% 78%,transparent 79%), linear-gradient(180deg,#6d5048 0 42%,#3d2925 43% 68%,#1c1211 69% 100%); }
+    .bg-ocean { --ground:#176b8b; --ground-edge:#8ce4ee; background: repeating-radial-gradient(ellipse at 50% 63%,rgba(255,255,255,.15) 0 2px,transparent 3px 18px), linear-gradient(180deg,#8de0f5 0 38%,#229ac0 39% 62%,#075678 63% 100%); }
+    .bg-night { --ground:#252956; --ground-edge:#7881c9; background: radial-gradient(circle at 78% 16%,#f4f1c7 0 5%,rgba(244,241,199,.16) 6% 12%,transparent 13%), radial-gradient(circle at 20% 18%,white 0 1px,transparent 2px), radial-gradient(circle at 58% 28%,white 0 1px,transparent 2px), linear-gradient(180deg,#24295d 0 45%,#161b45 46% 65%,#090b20 66% 100%); }
+    .bg-volcano { --ground:#5b2920; --ground-edge:#d66a3b; background: radial-gradient(ellipse at 50% 70%,rgba(255,104,20,.4) 0 5%,transparent 7%), linear-gradient(155deg,transparent 0 58%,rgba(255,91,24,.65) 59% 61%,transparent 62%), linear-gradient(180deg,#c55a40 0 35%,#713326 36% 66%,#291513 67% 100%); }
     
     /* ZONAS DE COMBATE */
     .combatant-zone {
@@ -111,10 +176,12 @@
     .battle-shadow {
       width: 80%;
       height: 18px;
-      background: rgba(0,0,0,0.4);
+      background: rgba(0,0,0,.42);
+      background: color-mix(in srgb, var(--ground, #222) 78%, black);
+      border: 2px solid color-mix(in srgb, var(--ground-edge, #777) 55%, transparent);
       border-radius: 50%;
       transform: scaleY(0.5);
-      filter: blur(3px);
+      box-shadow: 0 5px 12px rgba(0,0,0,.42), inset 0 2px 4px rgba(255,255,255,.12);
       margin-top: -8px; 
       z-index: 1;
     }
@@ -155,13 +222,13 @@
       border: 1px solid rgba(255,255,255,0.4);
       border-radius: 6px;
       padding: 4px 8px;
-      width: 120px;
+      width: 145px;
       z-index: 30;
       box-shadow: 0 4px 10px rgba(0,0,0,0.6);
       pointer-events: none;
     }
     #opponent-box { left: 12px; top: 12px; }
-    #player-box { right: 12px; bottom: 30px; }
+    #player-box { right: 12px; bottom: 50px; }
 
     .poke-name { 
       font-weight: 800; font-size: 0.8rem; margin-bottom: 2px; 
@@ -214,6 +281,10 @@
     .status-PAR { background: #ffeb3b; color: #000; }
     .status-SLP { background: #90a4ae; }
     .status-FRZ { background: #03a9f4; }
+    .effect-tags { display:flex; gap:3px; flex-wrap:wrap; margin-top:3px; min-height:0; }
+    .effect-chip { padding:2px 5px; font-size:.56rem; background:rgba(0,0,0,.34); }
+    .effect-chip.control { border-color:#c58cff; color:#e3c3ff; }
+    .effect-chip.danger { border-color:#ff7979; color:#ffaaaa; }
 
     /* PROYECTILES Y VFX */
     .projectile {
@@ -281,9 +352,16 @@
       touch-action: manipulation;
     }
     button:active:not(:disabled) { transform: translateY(2px); }
+    button:focus-visible, input:focus-visible, summary:focus-visible {
+      outline: 3px solid var(--ui-accent-2);
+      outline-offset: 2px;
+    }
     button:disabled { opacity: 0.5; cursor: not-allowed; filter: grayscale(1); }
 
     .btn-move { background: #232944; border-bottom: 3px solid rgba(0,0,0,0.3); }
+    .btn-move small { display:block; margin-top:3px; opacity:.82; font-size:.68rem; }
+    .btn-move-cd { position:absolute; top:4px; right:5px; background:rgba(0,0,0,.7); color:#fff; border-radius:999px; padding:2px 5px; font-size:.6rem; }
+    .emergency-move { grid-column:1 / -1; border-color:#f5d76e; box-shadow:inset 0 0 0 1px rgba(245,215,110,.3); }
     .btn-move:hover:not(:disabled) { filter: brightness(1.2); }
     
     .type-Fuego { background: #d84315; color: #fff; }
@@ -315,6 +393,28 @@
       gap: 10px;
       margin-top: 5px;
     }
+    #more-modes {
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 10px;
+      background: rgba(255,255,255,0.035);
+      overflow: hidden;
+    }
+    #more-modes > summary {
+      cursor: pointer;
+      color: var(--ui-muted);
+      font-weight: 800;
+      padding: 11px 12px;
+      list-style-position: inside;
+    }
+    #more-modes[open] > summary {
+      color: var(--ui-text);
+      border-bottom: 1px solid rgba(255,255,255,0.09);
+    }
+    #extra-mode-buttons {
+      display: grid;
+      gap: 8px;
+      padding: 10px;
+    }
     #seed-controls {
       display: grid;
       grid-template-columns: 1fr auto auto;
@@ -322,6 +422,8 @@
       margin-top: 4px;
     }
     #seed-input {
+      min-width: 0;
+      width: 100%;
       background: #0f1631;
       color: #e8ecff;
       border: 1px solid rgba(255,255,255,0.2);
@@ -338,6 +440,15 @@
       background: #37474f;
       color: #fff;
       border: 1px solid rgba(255,255,255,0.15);
+    }
+    @media (max-width: 420px) {
+      #seed-controls { grid-template-columns: 1fr 1fr; }
+      #seed-input { grid-column: 1 / -1; }
+      #seed-controls button { padding-inline: 7px; font-size: .78rem; }
+      #seed-lock-indicator { text-align: left; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      #battle-atmosphere, .anim-idle .sprite-img { animation:none !important; }
     }
     #seed-lock-indicator {
       margin-top: 4px;
@@ -420,12 +531,18 @@
     #replay-controls { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 6px; }
 
     #team-bar {
-      display: flex;
-      justify-content: space-between;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
+      align-items: center;
+      gap: 3px;
       background: rgba(0,0,0,0.3);
       padding: 5px 10px;
       border-radius: 20px;
       font-size: 0.8rem;
+    }
+    #team-bar > span { text-align:center; white-space:nowrap; }
+    @media (max-width: 420px) {
+      #team-bar { font-size:.68rem; padding-inline:5px; }
     }
 
     /* Generic Modal Overlay */
@@ -469,16 +586,19 @@
       opacity: 0.7;
     }
   </style>
-  <link rel="stylesheet" href="index.css">
 </head>
 
 <body onload="initGame()">
 
-  <div id="game-container">
+  <div id="game-container" class="pre-game">
     <div id="mode-display" class="mode-badge"></div>
     <h1 id="game-title">PokeRogue Kanto</h1>
 
     <div id="battle-scene" class="bg-forest">
+      <div id="battle-atmosphere" aria-hidden="true"></div>
+      <div id="battle-context" aria-label="Clima y evento del combate"></div>
+      <div id="opponent-field-effects" class="field-effects" aria-label="Efectos del campo rival"></div>
+      <div id="player-field-effects" class="field-effects" aria-label="Efectos de tu campo"></div>
       <div id="vfx-layer" style="position:absolute; inset:0; pointer-events:none; z-index:40;"></div>
 
       <div class="stats-box" id="opponent-box"></div>
@@ -503,7 +623,7 @@
       <span>Racha: <b id="streak-val">0</b></span>
     </div>
 
-    <div id="combat-log">Bienvenido a Kanto Rogue.</div>
+    <div id="combat-log" role="log" aria-live="polite" aria-label="Registro del combate">Bienvenido a Kanto Rogue.</div>
 
     <div id="controls-area">
       <div id="move-controls" class="grid-2"></div>
@@ -532,33 +652,37 @@
       <button id="btn-normal" onclick="startGame('normal')">Modo Normal</button>
       <button id="btn-nuzlocke" onclick="startGame('nuzlocke')">Modo Nuzlocke</button>
       <button id="btn-daily" onclick="startDailyChallenge()">Desafío Diario</button>
+      <details id="more-modes">
+        <summary>Más modos de juego</summary>
+        <div id="extra-mode-buttons"></div>
+      </details>
       <div id="run-history">
         <h3>Últimas Runs</h3>
         <div id="run-history-list"></div>
       </div>
     </div>
 
-    <div id="switch-overlay" class="modal-overlay">
-      <h3 class="modal-title">Elige un Pokémon</h3>
+    <div id="switch-overlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="switch-title">
+      <h3 class="modal-title" id="switch-title">Elige un Pokémon</h3>
       <div id="switch-list" class="modal-list"></div>
       <button class="btn-action" onclick="closeSwitchMenu()">Cancelar</button>
     </div>
 
-    <div id="move-overlay" class="modal-overlay">
-      <h3 class="modal-title">¡Límite de movimientos!</h3>
+    <div id="move-overlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="move-title">
+      <h3 class="modal-title" id="move-title">¡Límite de movimientos!</h3>
       <p style="text-align:center; font-size:0.9rem; margin-bottom:10px;">Elige un movimiento para olvidar:</p>
       <div id="move-list" class="modal-list"></div>
       <button class="btn-action" id="btn-cancel-learn">No aprender</button>
     </div>
 
-    <div id="party-full-overlay" class="modal-overlay">
-      <h3 class="modal-title">¡Equipo Completo!</h3>
+    <div id="party-full-overlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="party-full-title">
+      <h3 class="modal-title" id="party-full-title">¡Equipo Completo!</h3>
       <p style="text-align:center; font-size:0.9rem; margin-bottom:10px;">Selecciona un Pokémon para <b>liberar</b> y hacer sitio al nuevo, o libera al capturado.</p>
       <div id="party-full-list" class="modal-list"></div>
       <button class="btn-action btn-capture" id="btn-release-new">Liberar al Nuevo</button>
     </div>
 
-    <div id="replay-overlay">
+    <div id="replay-overlay" role="dialog" aria-modal="true" aria-label="Visor de replay">
       <div id="replay-header"></div>
       <div id="replay-event-box"></div>
       <div id="replay-controls">
@@ -568,8 +692,8 @@
         <button class="btn-action" onclick="closeReplayViewer()">Cerrar</button>
       </div>
     </div>
-    <div id="run-detail-overlay" class="modal-overlay">
-      <h3 class="modal-title">Detalle de Run</h3>
+    <div id="run-detail-overlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="run-detail-title">
+      <h3 class="modal-title" id="run-detail-title">Detalle de Run</h3>
       <div id="run-detail-body"></div>
       <button class="btn-action" onclick="closeRunDetails()">Cerrar</button>
     </div>
@@ -596,6 +720,7 @@ const SLUG_MAP = {
 };
 </script>
 <script src="moveset.js"></script>
+<script src="runtime_move_utils.js"></script>
 <script src="pok_catalog.js"></script>
 <script src="evolutions.js"></script>
 <script src="types.js"></script>
@@ -620,7 +745,8 @@ let state = {
   runStartedAt: 0,
   dailyChallenge: null,
   rogueRun: null,
-  runLog: null
+  runLog: null,
+  telemetry: null
 };
 let opponent = null;
 let battleField = {
@@ -664,6 +790,11 @@ class Pokemon {
     this.perishTurns = 0;
     this.comboStacks = 0;
     this.lastMoveType = null;
+    this.chainMoveKey = null;
+    this.chainMoveStacks = 0;
+    this.chargingMoveKey = null;
+    this.rechargeTurns = 0;
+    this.transformBackup = null;
     this.moveCooldowns = {};
     
     this.bonusMultiplier = 1.0;
@@ -677,18 +808,7 @@ class Pokemon {
     this.recalcStats();
     this.hp = this.maxHp;
 
-    if (isNuzlocke) {
-      const allMoves = Object.keys(MOVES);
-      this.moves = [];
-      const numMoves = Math.min(4, Math.max(1, Math.floor(level / 5)));
-      for(let i=0; i<numMoves; i++) {
-        const rnd = allMoves[Math.floor(gameRandom() * allMoves.length)];
-        if(!this.moves.includes(rnd)) this.moves.push(rnd);
-      }
-    } else {
-      this.moves = (data.moves || ['Tackle']).filter(mName => MOVES[mName]);
-      if (this.moves.length === 0) this.moves = ['Tackle'];
-    }
+    this.moves = buildInitialMoveSet(data, level, isNuzlocke);
   }
 
   recalcStats() {
@@ -711,6 +831,7 @@ class Pokemon {
   }
 
   resetStages() {
+    if (typeof restoreTransformation === 'function') restoreTransformation(this);
     this.stages = { atk:0, def:0, spa:0, spd:0, spe:0, acc:0, eva:0 };
     this.sleepTurns = 0;
     this.freezeTurns = 0;
@@ -730,6 +851,11 @@ class Pokemon {
     this.perishTurns = 0;
     this.comboStacks = 0;
     this.lastMoveType = null;
+    this.chainMoveKey = null;
+    this.chainMoveStacks = 0;
+    this.chargingMoveKey = null;
+    this.rechargeTurns = 0;
+    this.transformBackup = null;
   }
 }
 
@@ -884,14 +1010,27 @@ function renderRunHistory() {
     return;
   }
 
-  listEl.innerHTML = history.slice(0, 8).map((run, idx) => {
+  listEl.replaceChildren();
+  history.slice(0, 8).forEach((run, idx) => {
     const resultClass = run.result === 'DERROTA' ? 'run-result-loss' : '';
-    const left = `<span class="${resultClass}">${run.result}</span>`;
-    const seed = `<span class="run-seed" title="${run.seed}">${run.seed}</span>`;
     const modeTag = run.mode === 'daily' ? 'Diario' : (run.mode || 'normal');
-    const right = `<span>${modeTag} | Racha ${run.streak} | ${run.duration}</span>`;
-    return `<div class="run-row" onclick="openRunDetails(${idx})" title="Ver detalle">${left}${seed}${right}</div>`;
-  }).join('');
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = 'run-row';
+    row.title = 'Ver detalle';
+    row.addEventListener('click', () => openRunDetails(idx));
+    const result = document.createElement('span');
+    result.className = resultClass;
+    result.textContent = run.result || 'N/D';
+    const seed = document.createElement('span');
+    seed.className = 'run-seed';
+    seed.title = String(run.seed || 'sin-seed');
+    seed.textContent = String(run.seed || 'sin-seed');
+    const summary = document.createElement('span');
+    summary.textContent = `${modeTag} | Racha ${Number(run.streak) || 0} | ${run.duration || 'N/D'}`;
+    row.append(result, seed, summary);
+    listEl.appendChild(row);
+  });
 }
 
 function formatRunEndedAt(endedAtIso) {
@@ -919,6 +1058,17 @@ function openRunDetails(index) {
     `Vivos al final: ${Number.isFinite(run.alive) ? run.alive : 0}`,
     `Nivel máximo: ${Number.isFinite(run.maxLevel) ? run.maxLevel : 0}`
   ];
+  if (run.telemetry) {
+    const t = run.telemetry;
+    lines.push(
+      '', 'Balance de la run',
+      `Combates: ${t.battles || 0} | Victorias: ${t.wins || 0} | Derrotas: ${t.losses || 0}`,
+      `Turnos: ${t.turns || 0} | Precisión: ${t.accuracyPct || 0}%`,
+      `Daño causado: ${t.damageDealt || 0} | Recibido: ${t.damageReceived || 0}`,
+      `Movimiento más usado: ${t.favoriteMove ? `${MOVES[t.favoriteMove]?.nombre || t.favoriteMove} (${t.favoriteUses || 0})` : 'N/D'}`,
+      `Objetos: ${t.items?.potions || 0} pociones, ${t.items?.balls || 0} Poké Balls, ${t.items?.switches || 0} cambios`
+    );
+  }
   const body = $('run-detail-body');
   if (body) body.innerText = lines.join('\n');
   const overlay = $('run-detail-overlay');
@@ -933,6 +1083,7 @@ function closeRunDetails() {
 function startRunTracking() {
   state.runStartedAt = Date.now();
   currentRunRecorded = false;
+  if (typeof resetRunTelemetry === 'function') resetRunTelemetry();
   initRunLog();
   recordRunEvent('run_start', {
     mode: state.gameMode,
@@ -959,7 +1110,8 @@ function recordRunResult(resultLabel) {
     teamSize: state.team.length || 0,
     alive: aliveCount,
     maxLevel,
-    duration: formatDuration(durationMs)
+    duration: formatDuration(durationMs),
+    telemetry: typeof getTelemetrySummary === 'function' ? getTelemetrySummary(state.telemetry) : null
   };
   const history = getRunHistory();
   history.unshift(entry);
@@ -968,6 +1120,7 @@ function recordRunResult(resultLabel) {
   if (state.runLog) {
     state.runLog.result = resultLabel;
     state.runLog.endedAt = new Date(endedAt).toISOString();
+    state.runLog.telemetry = typeof getTelemetrySummary === 'function' ? getTelemetrySummary(state.telemetry) : null;
   }
 }
 
@@ -1048,6 +1201,7 @@ async function exportRunLog() {
     alert('No hay run log para exportar.');
     return;
   }
+  state.runLog.telemetry = typeof getTelemetrySummary === 'function' ? getTelemetrySummary(state.telemetry) : null;
   const payload = JSON.stringify(state.runLog, null, 2);
   const fileSafeSeed = (state.runSeed || 'run').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 24);
   const fileName = `runlog-${fileSafeSeed}-${Date.now()}.json`;
@@ -1207,12 +1361,14 @@ function initGame() {
 </script>
 <script src="runtime_plugins.js"></script>
 <script src="runtime_core_utils.js"></script>
+<script src="runtime_telemetry.js"></script>
 <script src="runtime_seed.js"></script>
 <script src="runtime_save_migration.js"></script>
 <script src="runtime_sprite_manifest.js"></script>
 <script src="runtime_sprites.js"></script>
 <script src="run_orchestration.js"></script>
 <script src="battle_helpers.js"></script>
+<script src="battle_ui.js"></script>
 <script src="battle_render.js"></script>
 <script src="battle_vfx.js"></script>
 <script src="battle_effects.js"></script>

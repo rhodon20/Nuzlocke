@@ -10,6 +10,7 @@
   // Render stats boxes with update logic for AnimeJS
   renderBox(currentP, 'player-box', true);
   renderBox(opponent, 'opponent-box', false);
+  if (typeof renderBattleEnvironment === 'function') renderBattleEnvironment({ localIsP1: true });
 
   const fetchSprite = async (mon, slot, back) => {
     const uniqueId = `${mon.name}-${mon.isShiny ? 'shiny' : 'norm'}-${back?'back':'front'}`;
@@ -52,15 +53,20 @@
     const catShort = m.cat === 'Esp' ? 'Esp' : (m.cat === 'Est' ? 'Est' : 'Fis');
     const cd = getMoveCooldown(currentP, mKey);
     const dis = typeof isMoveDisabled === 'function' ? isMoveDisabled(currentP, mKey) : false;
-    const disabled = turnLock || cd > 0 || dis;
+    const taunted = (currentP.tauntTurns || 0) > 0 && m.cat === 'Est';
+    const forcedOut = ((currentP.rechargeTurns || 0) > 0) || (currentP.chargingMoveKey && currentP.chargingMoveKey !== mKey);
+    const disabled = turnLock || cd > 0 || dis || taunted || forcedOut;
     const cdText = cd > 0 ? ` / CD ${cd}` : '';
-    const disText = dis ? ' / ANULADO' : '';
+    const disText = dis ? ' / ANULADO' : (taunted ? ' / MOFA' : '');
+    const strategyText = typeof getMoveStrategyLabel === 'function' ? getMoveStrategyLabel(m) : '';
     return `
     <button class="btn-move type-${m.tipo}" onclick="doTurn('${mKey}')" ${disabled?'disabled':''}>
-      ${m.nombre}<br><small>${m.tipo} / ${m.poder} / ${catShort}${cdText}${disText}</small>
+      ${cd > 0 ? `<span class="btn-move-cd">CD ${cd}</span>` : ''}
+      ${m.nombre}<br><small>${m.tipo} / ${m.poder} / ${catShort}${strategyText ? ` / ${strategyText}` : ''}${cdText}${disText}</small>
     </button>
   `}).join('');
-  $('move-controls').innerHTML = movesHTML;
+  const emergencyHTML = !turnLock && typeof getEmergencyMoveButton === 'function' ? getEmergencyMoveButton(currentP) : '';
+  $('move-controls').innerHTML = movesHTML + emergencyHTML;
   
   $('btn-capture').disabled = turnLock || state.inventory.balls <= 0 || hasDailyModifier('NO_CAPTURE');
   $('btn-potion').disabled = turnLock || state.inventory.pots <= 0 || currentP.hp >= currentP.maxHp || hasDailyModifier('NO_POTION');
@@ -75,7 +81,8 @@ function renderBox(mon, id, isPlayer) {
     const color = hpPct > 50 ? '#4caf50' : hpPct > 20 ? '#ffeb3b' : '#f44336';
     const shinyMark = mon.isShiny ? '<span style="color:gold; text-shadow:0 0 5px orange">[S]</span> ' : '';
     const abilityHTML = mon.ability ? `<div style="font-size:0.7rem; color:#ffd54a; font-weight:bold; margin-top:-2px; margin-bottom:2px;">Hb: ${mon.ability}</div>` : '';
-    const statusHTML = mon.status ? `<span class="status-tag status-${mon.status}">${mon.status}</span>` : '';
+    const statusHTML = typeof getMonStatusBadge === 'function' ? getMonStatusBadge(mon) : (mon.status ? `<span class="status-tag status-${mon.status}">${mon.status}</span>` : '');
+    const effectsHTML = typeof getMonEffectBadges === 'function' ? getMonEffectBadges(mon) : '';
 
     // Check if we need to rebuild the entire HTML (new pokemon)
     // We use a data attribute to track current pokemon name
@@ -97,6 +104,7 @@ function renderBox(mon, id, isPlayer) {
           </div>
           ${xpHTML}
           <div class="hp-text">${statusHTML}${mon.hp}/${mon.maxHp}</div>
+          <div class="effect-tags">${effectsHTML}</div>
         `;
         container.dataset.monName = mon.name;
     } else {
@@ -115,6 +123,8 @@ function renderBox(mon, id, isPlayer) {
 
         // Update Text (Simple replace, rolling numbers is complex with text mix)
         hpText.innerHTML = `${statusHTML}${mon.hp}/${mon.maxHp}`;
+        const effectTags = container.querySelector('.effect-tags');
+        if (effectTags) effectTags.innerHTML = effectsHTML;
         
         // Update XP if player
         if(isPlayer) {

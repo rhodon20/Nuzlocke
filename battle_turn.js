@@ -9,7 +9,8 @@
   if (turnMeta.attackerSide === undefined) turnMeta.attackerSide = !!isPlayer;
 
   if(attacker.hp <= 0) return; 
-  const moveKey = turnMeta?.moveKey || null;
+  let moveKey = turnMeta?.moveKey || null;
+  let telemetryRecorded = false;
   tickMoveCooldowns(attacker);
   attacker.statusShieldTurns = Math.max(0, (attacker.statusShieldTurns || 0) - 1);
   attacker.confusionShieldTurns = Math.max(0, (attacker.confusionShieldTurns || 0) - 1);
@@ -20,6 +21,12 @@
   if (moveKey && typeof isMoveDisabled === 'function' && isMoveDisabled(attacker, moveKey)) {
     const disabledName = MOVES[moveKey]?.nombre || moveKey;
     log(`${attacker.name} no puede usar ${disabledName}: está anulado.`);
+    return;
+  }
+  if ((attacker.rechargeTurns || 0) > 0) {
+    attacker.rechargeTurns = Math.max(0, attacker.rechargeTurns - 1);
+    log(`${attacker.name} debe recargar energía.`);
+    commitMoveChain(attacker, move, moveKey, false);
     return;
   }
 
@@ -81,12 +88,42 @@
      return;
   }
 
+  if (!move.chainPower && attacker.chainMoveKey) commitMoveChain(attacker, move, moveKey, false);
+  let resolvedMove = getChainedMovePreview(attacker, move, moveKey);
+
+  const weatherType = getWeather()?.type || null;
+  const needsCharge = (move.chargeTurns || 0) > 0 && move.skipChargeWeather !== weatherType;
+  if (needsCharge && attacker.chargingMoveKey !== moveKey) {
+    attacker.chargingMoveKey = moveKey;
+    attacker.lastUsedMoveKey = moveKey;
+    commitMoveChain(attacker, move, moveKey, false);
+    log(`${attacker.name} está preparando <b>${move.nombre}</b>.`);
+    if (typeof recordTelemetryMove === 'function') recordTelemetryMove(moveKey, isPlayer, { resolved: true, noAccuracy: true });
+    return;
+  }
+  if (attacker.chargingMoveKey === moveKey) attacker.chargingMoveKey = null;
+
   const isStatusMove = move.cat === 'Est';
   if ((attacker.tauntTurns || 0) > 0 && isStatusMove) {
     log(`${attacker.name} está bajo Mofa y no puede usar movimientos de estado.`);
     decayCombo(attacker);
     if (moveKey && move.cooldown) setMoveCooldown(attacker, moveKey, move.cooldown);
     return;
+  }
+
+  if (move.randomMove) {
+    const sourceKey = moveKey;
+    const candidates = Object.keys(MOVES).filter(key => {
+      const candidate = MOVES[key];
+      return candidate && !candidate.internalAction && !candidate.emergency && !candidate.randomMove && !candidate.chargeTurns && !candidate.hpCost;
+    });
+    if (!candidates.length) return;
+    const calledKey = candidates[Math.floor(gameRandom() * candidates.length)];
+    if (sourceKey && move.cooldown) setMoveCooldown(attacker, sourceKey, move.cooldown);
+    log(`${attacker.name} invocó ${MOVES[calledKey].nombre} con Metrónomo.`);
+    moveKey = calledKey;
+    move = { ...MOVES[calledKey], cooldown: 0 };
+    resolvedMove = getChainedMovePreview(attacker, move, moveKey);
   }
 
   const moveEffects = [];
@@ -116,13 +153,15 @@
   if (moveKey) attacker.lastUsedMoveKey = moveKey;
   await animateAttack(atkSlot, isPlayer);
 
-  const hitChance = getMoveHitChance(attacker, defender, move);
+  const hitChance = getMoveHitChance(attacker, defender, resolvedMove);
   if (gameRandom() > hitChance) {
     log(`${attacker.name} falló ${move.nombre}.`);
     decayCombo(attacker);
     if (moveKey && move.cooldown) {
       setMoveCooldown(attacker, moveKey, move.cooldown);
     }
+    if (move.chainPower) commitMoveChain(attacker, move, moveKey, false);
+    if (typeof recordTelemetryMove === 'function') recordTelemetryMove(moveKey, isPlayer, { missed: true });
     return;
   }
 
@@ -130,24 +169,66 @@
     log(`${defender.name} se protegió del ataque.`);
     decayCombo(attacker);
     if (moveKey && move.cooldown) setMoveCooldown(attacker, moveKey, move.cooldown);
+    if (move.chainPower) commitMoveChain(attacker, move, moveKey, false);
+    if (typeof recordTelemetryMove === 'function') recordTelemetryMove(moveKey, isPlayer, { resolved: true });
     return;
   }
   
   if (move.cat !== 'Est') {
     await shootProjectile(move.tipo, atkZone, defZone);
-    const dmg = calcDamage(attacker, defender, move);
+    const hitCount = getMultiHitCount(resolvedMove);
+    let totalDamage = 0;
+    let resolvedHits = 0;
+    let dmg = null;
+    for (let hit = 0; hit < hitCount; hit++) {
+      const hitDamage = calcDamage(attacker, defender, resolvedMove);
+      if (resolvedMove.ohko && hitDamage.mult !== 0) hitDamage.amount = defender.hp;
+      if (!dmg) dmg = hitDamage;
+      if (hitDamage.mult === 0) break;
+      totalDamage += hitDamage.amount;
+      resolvedHits++;
+      if (totalDamage >= defender.hp) break;
+    }
+    dmg = dmg || { amount: 0, mult: 1 };
     spawnParticles(move.tipo, $(defSlot));
 
     if (dmg.mult === 0) {
         log(`¡No afecta a ${defender.name}!`);
         decayCombo(attacker);
+        if (move.chainPower) commitMoveChain(attacker, move, moveKey, false);
     } else {
         if(dmg.mult > 1) log(`¡Es súper efectivo!`);
         if(dmg.mult < 1) log(`No es muy efectivo...`);
-        
+        if (hitCount > 1) log(`Golpeó ${resolvedHits} veces.`);
+        if (resolvedMove.chainStack > 1) log(`Cadena de ${move.nombre}: potencia ${resolvedMove.poder}.`);
+
         await animateDamage(defSlot);
-        defender.hp = Math.max(0, defender.hp - dmg.amount);
+        const actualDamage = Math.min(defender.hp, totalDamage);
+        defender.hp = Math.max(0, defender.hp - totalDamage);
+        if (move.ohko) log(`¡Ataque fulminante!`);
+        if (move.drain && actualDamage > 0 && (attacker.healBlockTurns || 0) <= 0) {
+          const healed = Math.max(1, Math.floor(actualDamage * move.drain));
+          const previousHp = attacker.hp;
+          attacker.hp = Math.min(attacker.maxHp, attacker.hp + healed);
+          if (attacker.hp > previousHp) log(`${attacker.name} absorbió ${attacker.hp - previousHp} PS.`);
+        }
+        if (move.recoil && actualDamage > 0) {
+          const recoil = Math.max(1, Math.floor(actualDamage * move.recoil));
+          attacker.hp = Math.max(1, attacker.hp - recoil);
+          log(`${attacker.name} recibió ${recoil} PS de retroceso.`);
+        }
+        if (move.hpCost) {
+          const cost = Math.max(1, Math.floor(attacker.maxHp * move.hpCost));
+          attacker.hp = Math.max(1, attacker.hp - cost);
+          log(`${attacker.name} quedó exhausto tras el ataque.`);
+        }
+        if (move.rechargeTurns) attacker.rechargeTurns = Math.max(attacker.rechargeTurns || 0, move.rechargeTurns);
+        if (typeof recordTelemetryMove === 'function') {
+          recordTelemetryMove(moveKey, isPlayer, { resolved: true, damage: actualDamage, hits: resolvedHits });
+          telemetryRecorded = true;
+        }
         updateComboOnSuccessfulAction(attacker, move);
+        if (move.chainPower) commitMoveChain(attacker, move, moveKey, true);
         renderAll(); // Trigger HP bar animation
     }
   }
@@ -161,6 +242,9 @@
       if (gameRandom() < (move.chance || 1.0)) {
           applyEffect(attacker, defender, move, turnMeta);
       }
+  }
+  if (!telemetryRecorded && typeof recordTelemetryMove === 'function') {
+    recordTelemetryMove(moveKey, isPlayer, { resolved: true });
   }
 
   if (moveKey && move.cooldown) {
@@ -224,6 +308,7 @@ async function doTurn(moveKey) {
     renderAll();
     return;
   }
+  if (typeof recordTelemetryTurn === 'function') recordTelemetryTurn('move');
   
   let oppMoveKey = chooseRandomUsableMoveKey(opponent);
   oppMoveKey = runPluginHookReduce('selectOpponentMove', oppMoveKey, {
@@ -338,11 +423,16 @@ async function doTurn(moveKey) {
 }
 
 async function handleDeath(mon, isPlayer) {
+    if (typeof restoreTransformation === 'function') restoreTransformation(mon);
     log(`¡${mon.name} se debilitó!`);
     mon.leechSeedBySide = null;
     mon.perishTurns = 0;
     mon.comboStacks = 0;
     mon.lastMoveType = null;
+    mon.chainMoveKey = null;
+    mon.chainMoveStacks = 0;
+    mon.chargingMoveKey = null;
+    mon.rechargeTurns = 0;
     
     // Animate death (fade out and scale down)
     const slot = isPlayer ? 'player-sprite-slot' : 'opponent-sprite-slot';

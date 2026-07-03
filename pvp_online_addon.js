@@ -32,6 +32,7 @@
     scanSessionId: 0,
     matchMode: 'classic',
     lastRoundVfx: null,
+    roundLogCursor: 0,
     draft: {
       active: false,
       pool: [],
@@ -481,6 +482,7 @@
     onlinePvp.matchStarted = false;
     onlinePvp.matchMode = 'classic';
     onlinePvp.lastRoundVfx = null;
+    onlinePvp.roundLogCursor = 0;
     onlinePvp.qrChunks = null;
     onlinePvp.qrChunkIndex = 0;
     resetOnlineDraftState();
@@ -797,6 +799,9 @@
         if (typeof importPvPSnapshot === 'function') {
           importPvPSnapshot(msg.snapshot);
         }
+        if (typeof window.appendSyncedCombatLogs === 'function') {
+          window.appendSyncedCombatLogs(msg.logs || []);
+        }
         pvpState.online.awaitingLocalMove = true;
         pvpState.online.statusText = 'Elige tu movimiento.';
         onlinePvp.localMove = null;
@@ -808,6 +813,12 @@
 
     if (msg.type === 'MATCH_END') {
       const p1Wins = !!msg.p1Wins;
+      if (typeof importPvPSnapshot === 'function' && msg.snapshot) {
+        importPvPSnapshot(msg.snapshot);
+      }
+      if (typeof window.appendSyncedCombatLogs === 'function') {
+        window.appendSyncedCombatLogs(msg.logs || []);
+      }
       setOnlinePostMatchIdle();
       if (typeof endPvPGame === 'function') endPvPGame(p1Wins);
       return;
@@ -951,6 +962,9 @@
     pvpState.p1.pendingMove = onlinePvp.localMove;
     pvpState.p2.pendingMove = onlinePvp.remoteMove;
     onlinePvp.lastRoundVfx = makeRoundVfxPayload(onlinePvp.localMove, onlinePvp.remoteMove);
+    onlinePvp.roundLogCursor = typeof window.getCombatLogCursor === 'function'
+      ? window.getCombatLogCursor()
+      : 0;
     pvpState.online.awaitingLocalMove = false;
     setStatusText('Resolviendo ronda...');
 
@@ -969,7 +983,10 @@
     }
 
     const snapshot = (typeof exportPvPSnapshot === 'function') ? exportPvPSnapshot() : null;
-    sendOnline({ type: 'ROUND_STATE', snapshot, vfx: onlinePvp.lastRoundVfx || null });
+    const logs = typeof window.getCombatLogEntriesSince === 'function'
+      ? window.getCombatLogEntriesSince(onlinePvp.roundLogCursor)
+      : [];
+    sendOnline({ type: 'ROUND_STATE', snapshot, vfx: onlinePvp.lastRoundVfx || null, logs });
 
     onlinePvp.localMove = null;
     onlinePvp.remoteMove = null;
@@ -1008,7 +1025,7 @@
   }
 
   function addButton() {
-    const host = document.getElementById('start-buttons');
+    const host = document.getElementById('extra-mode-buttons') || document.getElementById('start-buttons');
     if (!host || document.getElementById('btn-pvp-online')) return;
     const btn = document.createElement('button');
     btn.id = 'btn-pvp-online';
@@ -1213,7 +1230,11 @@
   window.onOnlinePvPRoundResolved = onRoundResolvedHost;
   window.onOnlinePvPEnd = function onOnlinePvPEnd(p1Wins) {
     if (!onlinePvp.active || onlinePvp.role !== 'host') return;
-    sendOnline({ type: 'MATCH_END', p1Wins: !!p1Wins });
+    const snapshot = typeof exportPvPSnapshot === 'function' ? exportPvPSnapshot() : null;
+    const logs = typeof window.getCombatLogEntriesSince === 'function'
+      ? window.getCombatLogEntriesSince(onlinePvp.roundLogCursor)
+      : [];
+    sendOnline({ type: 'MATCH_END', p1Wins: !!p1Wins, snapshot, logs });
     setOnlinePostMatchIdle();
   };
 

@@ -18,6 +18,7 @@ function migrateSaveData(raw) {
     dailyChallenge: base.dailyChallenge || null,
     rogueRun: (base.rogueRun && typeof base.rogueRun === 'object') ? base.rogueRun : null,
     runLog: base.runLog || null,
+    telemetry: typeof normalizeRunTelemetry === 'function' ? normalizeRunTelemetry(base.telemetry) : (base.telemetry || null),
     badges: Number.isFinite(base.badges) ? base.badges : 0,
     streak: Number.isFinite(base.streak) ? base.streak : 0,
     activeIdx: Number.isFinite(base.activeIdx) ? base.activeIdx : 0,
@@ -47,8 +48,14 @@ function migrateSaveData(raw) {
       p.perishTurns = Number.isFinite(p.perishTurns) ? p.perishTurns : 0;
       p.comboStacks = Number.isFinite(p.comboStacks) ? p.comboStacks : 0;
       p.lastMoveType = typeof p.lastMoveType === 'string' ? p.lastMoveType : null;
-      p.moves = Array.isArray(d.moves) ? d.moves.filter(m => MOVES[m]) : p.moves;
+      p.chainMoveKey = (typeof p.chainMoveKey === 'string' && MOVES[p.chainMoveKey]?.chainPower) ? p.chainMoveKey : null;
+      p.chainMoveStacks = p.chainMoveKey && Number.isFinite(p.chainMoveStacks) ? Math.max(0, p.chainMoveStacks) : 0;
+      p.chargingMoveKey = (typeof p.chargingMoveKey === 'string' && MOVES[p.chargingMoveKey]?.chargeTurns) ? p.chargingMoveKey : null;
+      p.rechargeTurns = Number.isFinite(p.rechargeTurns) ? Math.max(0, p.rechargeTurns) : 0;
+      p.transformBackup = p.transformBackup && typeof p.transformBackup === 'object' ? p.transformBackup : null;
+      p.moves = Array.isArray(d.moves) ? d.moves.filter(m => MOVES[m] && m !== 'Struggle' && !MOVES[m]?.internalAction) : p.moves;
       if (!p.moves.length) p.moves = ['Tackle'];
+      if (typeof isDamagingMoveKey === 'function' && !p.moves.some(isDamagingMoveKey)) p.moves.unshift('Tackle');
       p.recalcStats();
       p.hp = Math.min(Math.max(0, p.hp), p.maxHp);
       return p;

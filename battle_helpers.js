@@ -7,7 +7,9 @@ function getMoveHitChance(attacker, defender, move) {
   if (!move) return 0;
   if (move.alwaysHit) return 1;
 
-  const baseAccuracy = Number.isFinite(move.accuracy) ? move.accuracy : 1;
+  if (move.ohko && (defender?.level || 0) > (attacker?.level || 0)) return 0;
+  let baseAccuracy = Number.isFinite(move.accuracy) ? move.accuracy : 1;
+  if (move.ohko) baseAccuracy += Math.max(0, ((attacker?.level || 0) - (defender?.level || 0)) / 100);
   const accStage = attacker?.stages?.acc || 0;
   const evaStage = defender?.stages?.eva || 0;
   const stageMult = getStageMultiplier(accStage - evaStage);
@@ -20,6 +22,62 @@ function getMoveHitChance(attacker, defender, move) {
 function getComboDamageMultiplier(mon) {
   const stacks = Math.max(0, Math.min(3, mon?.comboStacks || 0));
   return 1 + (stacks * 0.05);
+}
+
+function getMultiHitCount(move) {
+  const cfg = move?.multiHit;
+  if (!cfg) return 1;
+  const min = Math.max(1, Math.floor(Number(cfg.min) || 1));
+  const max = Math.max(min, Math.floor(Number(cfg.max) || min));
+  if (min === max) return min;
+  if (min === 2 && max === 5) {
+    const roll = gameRandom();
+    if (roll < 3 / 8) return 2;
+    if (roll < 6 / 8) return 3;
+    if (roll < 7 / 8) return 4;
+    return 5;
+  }
+  return min + Math.floor(gameRandom() * (max - min + 1));
+}
+
+function getChainedMovePreview(mon, move, moveKey) {
+  if (!move) return move;
+  let resolved = move;
+  if (move.variablePower === 'LOW_HP') {
+    const ratio = (mon?.hp || 0) / Math.max(1, mon?.maxHp || 1);
+    const power = ratio <= 1/48 ? 200 : ratio <= 1/10 ? 150 : ratio <= 1/5 ? 100 : ratio <= 1/3 ? 80 : ratio <= 0.6875 ? 40 : 20;
+    resolved = { ...move, poder: power };
+  }
+  if (!move.chainPower || !moveKey) return resolved;
+  const maxStacks = Math.max(1, Number(move.chainPower.maxStacks) || 1);
+  const current = mon?.chainMoveKey === moveKey ? (mon.chainMoveStacks || 0) : 0;
+  const nextStack = Math.min(maxStacks, current + 1);
+  const multiplier = Math.max(1, Number(move.chainPower.multiplier) || 1);
+  return { ...resolved, poder: Math.floor(resolved.poder * Math.pow(multiplier, nextStack - 1)), chainStack: nextStack };
+}
+
+function commitMoveChain(mon, move, moveKey, succeeded) {
+  if (!mon) return;
+  if (!move?.chainPower || !moveKey || !succeeded) {
+    mon.chainMoveKey = null;
+    mon.chainMoveStacks = 0;
+    return;
+  }
+  const preview = getChainedMovePreview(mon, move, moveKey);
+  mon.chainMoveKey = moveKey;
+  mon.chainMoveStacks = preview.chainStack || 1;
+}
+
+function restoreTransformation(mon) {
+  if (!mon?.transformBackup) return;
+  const backup = mon.transformBackup;
+  mon.types = Array.isArray(backup.types) ? backup.types.slice() : mon.types;
+  ['atk','def','spa','spd','spe'].forEach(stat => {
+    if (Number.isFinite(backup[stat])) mon[stat] = backup[stat];
+  });
+  mon.moves = Array.isArray(backup.moves) ? backup.moves.slice() : mon.moves;
+  mon.ability = backup.ability || null;
+  mon.transformBackup = null;
 }
 
 function updateComboOnSuccessfulAction(mon, move) {
@@ -69,16 +127,28 @@ function setMoveCooldown(mon, moveKey, cooldown) {
 
 function getUsableMoveKeys(mon) {
   if (!mon || !Array.isArray(mon.moves)) return [];
-  return mon.moves.filter(mKey => MOVES[mKey] && getMoveCooldown(mon, mKey) <= 0 && !isMoveDisabled(mon, mKey));
+  if ((mon.rechargeTurns || 0) > 0) return MOVES.Recharge ? ['Recharge'] : [];
+  if (mon.chargingMoveKey && MOVES[mon.chargingMoveKey]) return [mon.chargingMoveKey];
+  return mon.moves.filter(mKey => {
+    const move = MOVES[mKey];
+    if (!move || getMoveCooldown(mon, mKey) > 0 || isMoveDisabled(mon, mKey)) return false;
+    if ((mon.tauntTurns || 0) > 0 && move.cat === 'Est') return false;
+    return true;
+  });
+}
+
+function advanceActionCooldowns(mon) {
+  tickMoveCooldowns(mon);
+}
+
+function shouldUseStruggle(mon) {
+  return getUsableMoveKeys(mon).length === 0 && !!MOVES.Struggle;
 }
 
 function chooseRandomUsableMoveKey(mon) {
   const usable = getUsableMoveKeys(mon);
   if (usable.length > 0) return usable[Math.floor(gameRandom() * usable.length)];
-  if (Array.isArray(mon?.moves) && mon.moves.length > 0) {
-    return mon.moves[Math.floor(gameRandom() * mon.moves.length)];
-  }
-  return null;
+  return shouldUseStruggle(mon) ? 'Struggle' : null;
 }
 
 function hasTypeStatusImmunity(mon, status) {
@@ -200,7 +270,7 @@ function getWeather() {
 const RUN_EVENT_POOL = [
   { id: 'BLOOD_MOON', label: 'Luna Roja', desc: '+15% daño global.', dmgMult: 1.15 },
   { id: 'MYSTIC_FOG', label: 'Niebla Mística', desc: '-10% precisión global.', accMult: 0.9 },
-  { id: 'HEALING_BREEZE', label: 'Brisa Vital', desc: 'Todos recuperan PS al final de turno.', endTurnHealPct: 1 / 16 }
+  { id: 'HEALING_BREEZE', label: 'Brisa Vital', desc: 'Todos recuperan 1/16 de sus PS máximos al final de cada turno.', endTurnHealPct: 1 / 16 }
 ];
 
 function maybeSelectRunEvent() {
